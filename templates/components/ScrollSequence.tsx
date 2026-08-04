@@ -27,7 +27,9 @@ import { SEQUENCES, framePath, type Sequence } from "@/components/frames";
 import { story, type Beat } from "@/components/story";
 import {
   computeScale,
+  decodeWindow,
   fadeOpacity,
+  framesInBudget,
   frameIndex,
   lerpColor,
   scrimOpacity,
@@ -46,6 +48,15 @@ const VERTICAL_ANCHOR = 0.45;
 /** Once someone has scrolled this far, they know the page scrolls. */
 const HINT_FADES_AT = 0.02;
 
+/**
+ * How much decoded imagery may stay resident.
+ *
+ * Chosen to sit well under what a mid-range phone tolerates. A decoded frame is
+ * pinned until closed, so this is a hard ceiling rather than a hint, and the
+ * frame count it buys depends entirely on the sequence's resolution.
+ */
+const DECODE_BUDGET_BYTES = 96 * 1024 * 1024;
+
 type LoadState =
   | { status: "loading"; done: number; total: number }
   | { status: "ready"; failed: number[] }
@@ -53,7 +64,12 @@ type LoadState =
 
 export function ScrollSequence() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const imagesRef = useRef<(HTMLImageElement | null)[]>([]);
+  /** Decoded frames currently held. Every value here is pinned until closed. */
+  const framesRef = useRef<Map<number, ImageBitmap | HTMLImageElement>>(new Map());
+  /** Bumped per sequence, so in-flight decodes from the previous one are dropped. */
+  const tokenRef = useRef(0);
+  const ensureWindowRef = useRef<((centre: number) => void) | null>(null);
+  const scheduleDrawRef = useRef<(() => void) | null>(null);
   const frameRef = useRef(0);
   const rafRef = useRef(0);
   /** Latest story position, kept in a ref so a resize can read it without staleness. */
@@ -101,58 +117,102 @@ export function ScrollSequence() {
     return () => removeEventListener("resize", onResize);
   }, []);
 
-  // Load the sequence. A frame that 404s is counted and named rather than
-  // silently leaving a hole nobody can explain later.
+  // Decode progressively, holding only a window of frames around wherever the
+  // visitor is. Everything here exists because a decoded frame stays pinned
+  // until it is closed: preloading a whole sequence is a few hundred megabytes,
+  // and with two sequences it is enough to have a phone kill the tab.
   useEffect(() => {
     if (!sequence) return;
 
-    let cancelled = false;
-    const images: (HTMLImageElement | null)[] = new Array(sequence.totalFrames).fill(null);
-    const failed: number[] = [];
-    let done = 0;
+    const token = ++tokenRef.current;
+    const frames = framesRef.current;
+    const pending = new Set<number>();
+    const failed = new Set<number>();
 
-    setLoad({ status: "loading", done: 0, total: sequence.totalFrames });
+    // One sequence resident at a time. Anything held for the previous one is
+    // now unreachable and would never be closed otherwise.
+    releaseAll(frames);
 
-    const settle = () => {
-      done++;
-      if (cancelled) return;
-      if (done < sequence.totalFrames) {
-        setLoad({ status: "loading", done, total: sequence.totalFrames });
+    const capacity = framesInBudget(DECODE_BUDGET_BYTES, sequence.width, sequence.height);
+    const initial = Math.min(sequence.totalFrames, Math.max(1, Math.ceil(capacity / 2)));
+    setLoad({ status: "loading", done: 0, total: initial });
+
+    const worker = makeWorker();
+    let settledInitial = 0;
+
+    const arrived = (index: number, bitmap: ImageBitmap | HTMLImageElement | null) => {
+      if (token !== tokenRef.current) {
+        // A later sequence took over while this was in flight.
+        if (bitmap && "close" in bitmap) bitmap.close();
         return;
       }
+      pending.delete(index);
+      if (bitmap) frames.set(index, bitmap);
+      else failed.add(index);
 
-      imagesRef.current = images;
-      if (failed.length === sequence.totalFrames) {
-        setLoad({ status: "failed" });
-        return;
+      if (index < initial) {
+        settledInitial++;
+        if (settledInitial < initial) {
+          setLoad({ status: "loading", done: settledInitial, total: initial });
+        } else if (failed.size >= initial) {
+          setLoad({ status: "failed" });
+        } else {
+          if (failed.size > 0) warnFailed(failed);
+          setLoad({ status: "ready", failed: [...failed] });
+        }
       }
-      if (failed.length > 0) {
-        // Naming the indices turns "the animation sticks somewhere" into a
-        // thirty-second fix instead of a hunt through the wrong file.
-        console.warn(
-          `[scrollytelling] ${failed.length} frame(s) failed to load: ${failed.join(", ")}.\n` +
-            "Re-run: open-scrolltelling frames <video> .",
-        );
-      }
-      setLoad({ status: "ready", failed });
+      scheduleDrawRef.current?.();
     };
 
-    sequence.edgeColors.forEach((_, i) => {
+    const request = (index: number) => {
+      if (frames.has(index) || pending.has(index) || failed.has(index)) return;
+      pending.add(index);
+      const url = framePath(sequence.id, index);
+
+      if (worker) {
+        worker.postMessage({ index, url, token });
+        return;
+      }
+      // No worker: decode on the main thread. img.decode() still keeps the work
+      // off the paint path, it just cannot be moved off the thread entirely.
       const img = new Image();
       img.decoding = "async";
-      img.onload = () => {
-        images[i] = img;
-        settle();
+      img.src = url;
+      img
+        .decode()
+        .then(() => arrived(index, img))
+        .catch(() => arrived(index, null));
+    };
+
+    if (worker) {
+      worker.onmessage = (event: MessageEvent) => {
+        const { index, token: t, bitmap } = event.data ?? {};
+        if (t !== token) {
+          if (bitmap) bitmap.close();
+          return;
+        }
+        arrived(index, bitmap ?? null);
       };
-      img.onerror = () => {
-        failed.push(i);
-        settle();
-      };
-      img.src = framePath(sequence.id, i);
-    });
+    }
+
+    // Called from the draw loop: keep the window populated, release the rest.
+    ensureWindowRef.current = (centre: number) => {
+      const w = decodeWindow(centre, sequence.totalFrames, capacity);
+      for (let i = w.from; i <= w.to; i++) request(i);
+      for (const [index, bitmap] of frames) {
+        if (index < w.from || index > w.to) {
+          if ("close" in bitmap) bitmap.close();
+          frames.delete(index);
+        }
+      }
+    };
+
+    ensureWindowRef.current(0);
 
     return () => {
-      cancelled = true;
+      ensureWindowRef.current = null;
+      worker?.terminate();
+      releaseAll(frames);
     };
   }, [sequence]);
 
@@ -195,12 +255,17 @@ export function ScrollSequence() {
       ctx.fillStyle = css;
       ctx.fillRect(0, 0, vw, vh);
 
-      // Nearest decoded frame, so a gap never shows as a blank canvas.
-      let img = imagesRef.current[Math.round(exact)];
-      if (!img) {
-        for (let d = 1; d < sequence.totalFrames && !img; d++) {
-          img = imagesRef.current[Math.round(exact) - d] ?? imagesRef.current[Math.round(exact) + d];
-        }
+      // Keep the decode window centred on where the visitor is.
+      ensureWindowRef.current?.(exact);
+
+      // Nearest decoded frame, so a gap never shows as a blank canvas. This is
+      // the normal case now, not an edge case: frames beyond the window are
+      // deliberately not held.
+      const held = framesRef.current;
+      const nearest = Math.round(exact);
+      let img = held.get(nearest);
+      for (let d = 1; d < sequence.totalFrames && !img; d++) {
+        img = held.get(nearest - d) ?? held.get(nearest + d);
       }
       if (!img) return;
 
@@ -214,6 +279,9 @@ export function ScrollSequence() {
       if (rafRef.current) return;
       rafRef.current = requestAnimationFrame(draw);
     };
+    // The decoder calls this when a frame arrives, so a newly decoded frame is
+    // painted rather than waiting for the next scroll event.
+    scheduleDrawRef.current = schedule;
 
     schedule();
     addEventListener("scroll", schedule, { passive: true });
@@ -223,6 +291,7 @@ export function ScrollSequence() {
       removeEventListener("resize", schedule);
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
       rafRef.current = 0;
+      scheduleDrawRef.current = null;
     };
   }, [sequence, load.status]);
 
@@ -397,5 +466,38 @@ function NoFrames({ reason }: Readonly<{ reason: "empty" | "failed" }>) {
         </code>
       </div>
     </main>
+  );
+}
+
+/**
+ * Creates the decode worker, or null when the browser cannot run one.
+ *
+ * The `new URL(..., import.meta.url)` form is required, not stylistic: it is
+ * what lets the bundler find the worker and emit it as its own chunk. A plain
+ * string path silently ships nothing.
+ */
+function makeWorker(): Worker | null {
+  if (typeof Worker === "undefined" || typeof createImageBitmap === "undefined") return null;
+  try {
+    return new Worker(new URL("./decoder.worker.js", import.meta.url), { type: "module" });
+  } catch {
+    return null;
+  }
+}
+
+/** Releases every held frame. A bitmap nobody closes is pinned for the page's life. */
+function releaseAll(frames: Map<number, ImageBitmap | HTMLImageElement>) {
+  for (const bitmap of frames.values()) {
+    if ("close" in bitmap) bitmap.close();
+  }
+  frames.clear();
+}
+
+function warnFailed(failed: Set<number>) {
+  // Naming the indices turns "the animation sticks somewhere" into a
+  // thirty-second fix instead of a hunt through the wrong file.
+  console.warn(
+    `[scrollytelling] ${failed.size} frame(s) failed to load: ${[...failed].join(", ")}.\n` +
+      "Re-run: open-scrolltelling frames <video> .",
   );
 }
