@@ -90,11 +90,8 @@ test("scaffold accepts --force", () => {
   assert.equal(parseArgs(["scaffold", "./site", "--force"]).flags.force, true);
 });
 
-test("a flag the command does not implement is rejected, not ignored", () => {
-  // --diff belongs to the upgrade-path work and does not exist yet. Accepting
-  // it silently would be worse than refusing it: the caller would believe
-  // something happened.
-  assert.throws(() => parseArgs(["scaffold", "./site", "--diff"]), UsageError);
+test("scaffold accepts --diff", () => {
+  assert.equal(parseArgs(["scaffold", "./site", "--diff"]).flags.diff, true);
 });
 
 test("a flag belonging to another command is rejected, not ignored", () => {

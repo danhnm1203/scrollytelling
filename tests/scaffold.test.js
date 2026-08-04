@@ -7,7 +7,15 @@
  */
 
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, existsSync, rmSync } from "node:fs";
+import {
+  mkdtempSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  writeFileSync,
+  existsSync,
+  rmSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, describe, it } from "node:test";
@@ -23,6 +31,17 @@ function tempDir() {
 after(() => {
   for (const d of temps) rmSync(d, { recursive: true, force: true });
 });
+
+/** Every file in the tree, as path -> contents. Used to prove nothing moved. */
+function fingerprint(dir, prefix = "") {
+  const out = {};
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const rel = prefix ? `${prefix}/${entry.name}` : entry.name;
+    if (entry.isDirectory()) Object.assign(out, fingerprint(join(dir, entry.name), rel));
+    else out[rel] = readFileSync(join(dir, entry.name), "utf8");
+  }
+  return out;
+}
 
 /** Capture stdout/stderr around a run so tests can assert on what the user saw. */
 async function runCapturing(positionals, flags = {}) {
@@ -142,6 +161,63 @@ describe("scaffold", () => {
     assert.notEqual(code, 0);
     assert.ok(stderr.length > 0, "a failure must explain itself");
     assert.ok(!/^\s*at /m.test(stderr), "a permission error must not surface as a stack trace");
+  });
+
+  it("records what the template looked like, so --diff has a baseline", async () => {
+    const dir = join(tempDir(), "site");
+    await runCapturing([dir]);
+
+    const record = JSON.parse(readFileSync(join(dir, ".scrolltelling-version"), "utf8"));
+    assert.ok(record.version, "expected a version");
+    assert.ok(Object.keys(record.files).length > 5, "expected the installed files to be recorded");
+    assert.ok(record.files["components/ScrollSequence.tsx"], "expected a hash per installed file");
+  });
+
+  it("reports nothing to do when the template has not moved", async () => {
+    const dir = join(tempDir(), "site");
+    await runCapturing([dir]);
+
+    const { code, stdout } = await runCapturing([dir], { diff: true });
+
+    assert.equal(code, 0);
+    assert.match(stdout, /nothing to do/i);
+  });
+
+  it("never modifies the project when reporting a diff", async () => {
+    // The whole premise is that adopting a change is the owner's decision. A
+    // report that quietly rewrote files would make re-running this frightening.
+    const dir = join(tempDir(), "site");
+    await runCapturing([dir]);
+    const before = fingerprint(dir);
+
+    await runCapturing([dir], { diff: true });
+
+    assert.deepEqual(fingerprint(dir), before);
+  });
+
+  it("explains itself when the project has no recorded baseline", async () => {
+    const dir = tempDir(); // an empty directory, never scaffolded
+    const { code, stdout } = await runCapturing([dir], { diff: true });
+
+    assert.equal(code, 0, "a missing baseline is not an error");
+    assert.match(stdout, /no baseline|no \.scrolltelling-version/i);
+  });
+
+  it("survives a corrupt baseline instead of crashing", async () => {
+    const dir = join(tempDir(), "site");
+    await runCapturing([dir]);
+    writeFileSync(join(dir, ".scrolltelling-version"), "{ not json");
+
+    const { code, stdout } = await runCapturing([dir], { diff: true });
+
+    assert.equal(code, 0);
+    assert.match(stdout, /baseline/i);
+  });
+
+  it("needs a project directory to diff", async () => {
+    const { code, stderr } = await runCapturing([], { diff: true });
+    assert.notEqual(code, 0);
+    assert.match(stderr, /directory/i);
   });
 
   it("requires a project directory", async () => {
