@@ -4,13 +4,13 @@ import { fileURLToPath } from "node:url";
 
 import { parseArgs, UsageError } from "../lib/cli-args.mjs";
 
-const HELP = `open-scrolltelling — turn a video into a scroll-scrubbed Next.js landing page
+const HELP = `scrollytelling — turn a video into a scroll-scrubbed Next.js landing page
 
 Usage
-  open-scrolltelling scaffold <project_dir> [--force] [--diff]
-  open-scrolltelling frames <video|image-dir> <project_dir> [options]
-  open-scrolltelling frames --preview <video>
-  open-scrolltelling frames --check <project_dir>
+  scrollytelling scaffold <project_dir> [--force] [--diff]
+  scrollytelling frames <video|image-dir> <project_dir> [options]
+  scrollytelling frames --preview <video>
+  scrollytelling frames --check <project_dir>
 
 frames options
   --frames <n>      number of frames in the sequence      (default 50)
@@ -27,7 +27,7 @@ Other
   -h, --help        show this help
   -v, --version     print the version
 
-Docs: https://github.com/danhnm1203/open-scrolltelling
+Docs: https://github.com/danhnm1203/scrollytelling
 `;
 
 function version() {
@@ -63,10 +63,10 @@ try {
   process.exitCode = (await main(process.argv.slice(2))) ?? 0;
 } catch (err) {
   if (err instanceof UsageError) {
-    process.stderr.write(`open-scrolltelling: ${err.message}\n\nRun with --help for usage.\n`);
+    process.stderr.write(`scrollytelling: ${err.message}\n\nRun with --help for usage.\n`);
     process.exitCode = 2;
   } else {
-    process.stderr.write(`open-scrolltelling: ${err?.stack ?? err}\n`);
+    process.stderr.write(`scrollytelling: ${err?.stack ?? err}\n`);
     process.exitCode = 1;
   }
 }

@@ -1,7 +1,7 @@
-# Eng Review — open-scrolltelling (Phase A)
+# Eng Review — scrollytelling (Phase A)
 
 2026-08-04 · Branch: `main` · Commit: `13d82bc`
-Reviewed: [design, revision 2](../superpowers/specs/2026-08-04-open-scrolltelling-design.md)
+Reviewed: [design, revision 2](../superpowers/specs/2026-08-04-scrollytelling-design.md)
 Mode: FULL_REVIEW · Outside voice: Claude subagent (Codex not installed)
 
 ---
@@ -73,7 +73,7 @@ with an npm CLI.
 | B3 | Two measure-then-decide gates with nowhere to measure | **One checkpoint after the scrubbing loop first renders** |
 | B4 | Wrong project dependency list; `useScroll` unnecessary | **Drop framer-motion, compute `scrollProgress` directly** |
 | C1 | The readability report is circular | Two modes: raw table, then `--check` |
-| C2 | `TEMPLATE_VERSION` has two writers | `.scrolltelling-version`, not generated |
+| C2 | `TEMPLATE_VERSION` has two writers | `.scrollytelling-version`, not generated |
 | C3 | A parallel `PORTRAIT_FRAMES` is the wrong shape | **`SEQUENCES: Sequence[]`** |
 | C4 | `opacity: 0` beats are still read by screen readers | Static block + `aria-hidden` animated layer |
 | D1 | The golden master is version-flaky | Pin `sharp` and `ffmpeg-static` exactly |
@@ -93,7 +93,7 @@ with an npm CLI.
   scripts/frames.mjs ────────── writes ────────────▶ public/frames/*.webp
   scripts/scaffold.mjs ──────── copies ────────────▶ components/frames.ts (SEQUENCES[])
       │                                             │ components/decoder.worker.js
-      │                                             │ .scrolltelling-version ◀── one writer
+      │                                             │ .scrollytelling-version ◀── one writer
   lib/scroll-math.mjs ───────── copies ────────────▶ lib/scroll-math.mjs
       ▲                                             ▲
       │ imports                                     │ imports
@@ -125,7 +125,7 @@ changes page height → drops the visitor somewhere else in the story. No test, 
 nothing visible goes wrong. This is the worst failure shape: the page reports nothing and simply
 reads as "janky."
 
-Test plan for `/qa`: `~/.gstack/projects/open-scrolltelling/danhnguyen-main-eng-review-test-plan-*.md`
+Test plan for `/qa`: `~/.gstack/projects/scrollytelling/danhnguyen-main-eng-review-test-plan-*.md`
 
 ## Section 4 — Performance
 
@@ -210,10 +210,10 @@ Continuing from T1–T23 in the CEO review. 17 new tasks from this round.
   - Surfaced by: Architecture A1 — the root tests guard a different copy than the page runs
   - Files: `lib/scroll-math.mjs`, `tests/parity.test.js`, `scripts/scaffold.mjs`
   - Verify: change one character in the `templates/` copy → `node --test` fails
-- [ ] **E2 (P1, human: ~1d / CC: ~30min)** — distribution — Publish the `open-scrolltelling` npm CLI
+- [ ] **E2 (P1, human: ~1d / CC: ~30min)** — distribution — Publish the `scrollytelling` npm CLI
   - Surfaced by: Architecture A2 — no install or update path for the skill
   - Files: `package.json` (bin), `.github/workflows/release.yml`, `README.md`, `SKILL.md`
-  - Verify: `npx open-scrolltelling --help` works from a clean machine
+  - Verify: `npx scrollytelling --help` works from a clean machine
 - [ ] **E3 (P1, human: ~1h / CC: ~8min)** — frames.mjs — Step 0 dependency self-check
   - Surfaced by: Architecture A3 — the workflow's first command fails on a fresh clone
   - Files: `scripts/frames.mjs`
@@ -246,7 +246,7 @@ Continuing from T1–T23 in the CEO review. 17 new tasks from this round.
   - Surfaced by: Quality C1 — the report names beats that do not exist yet
   - Files: `scripts/frames.mjs`
   - Verify: a normal run prints the luma table; `--check` after story.ts prints per-beat warnings
-- [ ] **E11 (P2, human: ~1h / CC: ~5min)** — scaffold — `.scrolltelling-version` with a single writer
+- [ ] **E11 (P2, human: ~1h / CC: ~5min)** — scaffold — `.scrollytelling-version` with a single writer
   - Surfaced by: Quality C2 — `frames.mjs` overwrites what `scaffold.mjs` stamped
   - Files: `scripts/scaffold.mjs`, `scripts/frames.mjs`
   - Verify: re-running `frames.mjs` leaves the version unchanged; `--diff` still compares correctly
