@@ -41,7 +41,7 @@ const SOURCE_FRAMES = 25;
 const STRIPE_HEIGHT = 30;
 const SAMPLED = 5;
 
-/** Recorded from the pinned sharp and ffmpeg-static. */
+/** Recorded from the pinned sharp and ffmpeg-static, on macOS arm64. */
 const EXPECTED_EDGES = [
   [214, 108, 108],
   [124, 161, 82],
@@ -49,6 +49,20 @@ const EXPECTED_EDGES = [
   [114, 145, 227],
   [219, 90, 126],
 ];
+
+/**
+ * How far a channel may sit from the recorded value.
+ *
+ * Not slack for convenience: libvips and ffmpeg are built differently on each
+ * platform, and the same pinned versions produce values a point or two apart on
+ * Linux and macOS. Asserting exact equality made this test pass only on the
+ * machine that recorded it, which CI found immediately.
+ *
+ * Three is comfortably above the observed platform spread and far below any
+ * real regression — reading one edge instead of four moves these by a hundred
+ * or more, and sampling the wrong moment changes the hue outright.
+ */
+const CHANNEL_TOLERANCE = 3;
 
 const temps = [];
 function tempDir() {
@@ -133,9 +147,23 @@ describe("golden master — a clip through the whole pipeline", () => {
     assert.equal(sequence.height, HEIGHT);
   });
 
-  it("measures the exact border colors", () => {
-    // The recorded values. This is what fails if sharp or ffmpeg change.
-    assert.deepEqual(sequence.edgeColors, EXPECTED_EDGES);
+  it("measures the recorded border colors", () => {
+    // What fails if sharp or ffmpeg change behaviour. Compared per channel with
+    // a tolerance rather than deep-equal, so a platform's build of libvips
+    // cannot fail it for being a point out.
+    assert.equal(sequence.edgeColors.length, EXPECTED_EDGES.length);
+
+    sequence.edgeColors.forEach((actual, frame) => {
+      const expected = EXPECTED_EDGES[frame];
+      actual.forEach((value, channel) => {
+        const drift = Math.abs(value - expected[channel]);
+        assert.ok(
+          drift <= CHANNEL_TOLERANCE,
+          `frame ${frame} channel ${channel}: ${value} vs recorded ${expected[channel]} ` +
+            `(drift ${drift}, allowed ${CHANNEL_TOLERANCE})`,
+        );
+      });
+    });
   });
 
   it("samples a different moment for every frame", () => {

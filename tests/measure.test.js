@@ -93,6 +93,22 @@ describe("edgeColor", () => {
     assert.ok(r > 0, "bottom edge must contribute");
   });
 
+  it("samples a narrow band, not a wide one", () => {
+    // A thin dark rim around a white field. The reported color must come from
+    // the rim; a band several times wider would pull the white in and lighten
+    // it. The whole-pipeline test cannot see this — its fixture has a thick
+    // stripe and a flat body, so band width makes almost no difference there.
+    const size = 200;
+    const rim = Math.round(size * 0.02);
+    const buf = image(size, size, (x, y) => {
+      const onRim = x < rim || y < rim || x >= size - rim || y >= size - rim;
+      return onRim ? [0, 0, 0] : [255, 255, 255];
+    });
+
+    const [r] = edgeColor(buf, size, size);
+    assert.ok(r < 40, `expected the rim color, got ${r} — the band is reaching too far in`);
+  });
+
   it("handles an image smaller than the sampling band", () => {
     const buf = image(2, 2, () => [10, 20, 30]);
     assert.deepEqual(edgeColor(buf, 2, 2), [10, 20, 30]);
