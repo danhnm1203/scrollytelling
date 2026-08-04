@@ -1,7 +1,7 @@
-# open-scrollytelling — Design (Phase A)
+# scrollytelling — Design (Phase A)
 
-2026-08-04 · Revision 3, after the [CEO review](../../reviews/2026-08-04-ceo-review-open-scrollytelling.md)
-and the [eng review](../../reviews/2026-08-04-eng-review-open-scrollytelling.md)
+2026-08-04 · Revision 3, after the [CEO review](../../reviews/2026-08-04-ceo-review-scrollytelling.md)
+and the [eng review](../../reviews/2026-08-04-eng-review-scrollytelling.md)
 
 The implementation task list lives in those two review documents. This file is the source of
 truth for the *design*; the reviews are the source of truth for the *order of work*.
@@ -68,13 +68,13 @@ The heavy tooling lives in the **skill repo**. The generated project carries onl
 site needs to build.
 
 ```
-  SKILL REPO (open-scrollytelling)          GENERATED PROJECT
+  SKILL REPO (scrollytelling)              GENERATED PROJECT
   ─────────────────────────────            ─────────────────
   SKILL.md · LICENSE · README.md           app/{page,layout}.tsx
   .github/workflows/{test,release}.yml     app/globals.css
   package.json                             components/ScrollSequence.tsx
     deps: sharp, ffmpeg-static (PINNED)    components/story.ts      ◀── the editing surface
-    bin:  open-scrollytelling  (npm CLI)    components/frames.ts     ◀── GENERATED, do not edit
+    bin:  scrollytelling  (npm CLI)        components/frames.ts     ◀── GENERATED, do not edit
                                            components/decoder.worker.js
   scripts/scaffold.mjs ──── copies ───────▶ lib/scroll-math.mjs (+ .d.ts)
     (node:fs only)                         public/frames/…          (COMMITTED to git)
@@ -123,7 +123,7 @@ real page runs — the copy is a fork.
 
 ### Distribution
 
-The skill publishes as an **npm CLI**: `npx open-scrollytelling <video> <project_dir>`. It works
+The skill publishes as an **npm CLI**: `npx scrollytelling <video> <project_dir>`. It works
 without Claude, and npm handles versioning and updates. `SKILL.md` calls that same CLI.
 `.github/workflows/release.yml` publishes on tag. Without this step the only way to install is
 copying files into `~/.claude/skills` by hand, with no update path.
@@ -141,9 +141,9 @@ against the wrong baseline.
 ## `frames.mjs`
 
 ```
-open-scrollytelling frames <video|directory> <project_dir> [--frames 50] [--max-width 1280] [--quality 82]
-open-scrollytelling frames --preview <video>          # 5 frames to a temp dir, no project needed
-open-scrollytelling frames --check <project_dir>      # reads story.ts, warns per beat
+scrollytelling frames <video|directory> <project_dir> [--frames 50] [--max-width 1280] [--quality 82]
+scrollytelling frames --preview <video>          # 5 frames to a temp dir, no project needed
+scrollytelling frames --check <project_dir>      # reads story.ts, warns per beat
 ```
 
 `--preview` exists because the workflow needs to look at frames in order to propose copy
@@ -442,15 +442,15 @@ block solves both.
 ## Workflow
 
 ```
-0. npm i -g open-scrollytelling      (or npx; frames self-checks its dependencies)
-1. open-scrollytelling frames --preview <video>     → 5 frames to a temp dir
+0. npm i -g scrollytelling      (or npx; frames self-checks its dependencies)
+1. scrollytelling frames --preview <video>     → 5 frames to a temp dir
 2. Read those frames, propose beats from what the footage is actually doing
-3. open-scrollytelling scaffold <project_dir>
+3. scrollytelling scaffold <project_dir>
 4. cd <project_dir> && npm install                 (next/react/tailwind only — fast)
-5. open-scrollytelling frames <video> <project_dir> --frames 50 --focus <portrait region>
+5. scrollytelling frames <video> <project_dir> --frames 50 --focus <portrait region>
    → read the raw luminance table
 6. Edit components/story.ts
-7. open-scrollytelling frames --check <project_dir> → per-beat warnings
+7. scrollytelling frames --check <project_dir> → per-beat warnings
 8. npm run build && npm run start -- -p 3737
 9. ◀── MEASUREMENT CHECKPOINT (below)
 10. Full verification, then report

@@ -49,7 +49,7 @@ test("a bad command exits 2 with a usage error, not a stack trace", async () => 
 });
 
 test("the bin entry declared in package.json is the file that exists", async () => {
-  const declared = PKG.bin["open-scrollytelling"];
+  const declared = PKG.bin["scrollytelling"];
   assert.equal(declared, "./bin/cli.mjs");
   const { code } = await cli(["--help"]);
   assert.equal(code, 0);

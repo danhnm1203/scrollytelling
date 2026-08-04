@@ -151,12 +151,12 @@ export async function run(positionals, flags = {}) {
     return scaffold(positionals, flags);
   } catch (err) {
     if (err instanceof ScaffoldError) {
-      process.stderr.write(`open-scrollytelling: ${err.message}\n`);
+      process.stderr.write(`scrollytelling: ${err.message}\n`);
       return 1;
     }
     // Anything else is still ours to explain. A permission error should read as
     // a sentence, not as a stack trace the user has to decode.
-    process.stderr.write(`open-scrollytelling: could not scaffold — ${err.message}\n`);
+    process.stderr.write(`scrollytelling: could not scaffold — ${err.message}\n`);
     return 1;
   }
 }
@@ -303,7 +303,7 @@ function report({ projectDir, written, skipped, overwrote, forced }) {
       "Next:",
       `  cd ${projectDir}`,
       "  npm install",
-      "  open-scrollytelling frames <video> .",
+      "  scrollytelling frames <video> .",
     );
   }
 

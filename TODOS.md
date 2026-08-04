@@ -1,8 +1,8 @@
 # TODOS
 
 Work considered and deliberately deferred. Sources:
-[CEO review](docs/reviews/2026-08-04-ceo-review-open-scrollytelling.md) and
-[eng review](docs/reviews/2026-08-04-eng-review-open-scrollytelling.md), 2026-08-04.
+[CEO review](docs/reviews/2026-08-04-ceo-review-scrollytelling.md) and
+[eng review](docs/reviews/2026-08-04-eng-review-scrollytelling.md), 2026-08-04.
 
 ---
 

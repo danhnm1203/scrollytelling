@@ -1,7 +1,7 @@
-# CEO Review — open-scrollytelling (Phase A)
+# CEO Review — scrollytelling (Phase A)
 
 2026-08-04 · Branch: `main` · Commit: `9849055`
-Reviewed: [`docs/superpowers/specs/2026-08-04-open-scrollytelling-design.md`](../superpowers/specs/2026-08-04-open-scrollytelling-design.md)
+Reviewed: [`docs/superpowers/specs/2026-08-04-scrollytelling-design.md`](../superpowers/specs/2026-08-04-scrollytelling-design.md)
 Mode: **SELECTIVE EXPANSION** · Approach: **B** (spec + pure-function core + tests)
 Outside voice: Claude subagent (Codex not installed)
 
@@ -117,7 +117,7 @@ precondition for a stated done criterion**, not a nice-to-have. Recorded in TODO
 ## Architecture (after these decisions)
 
 ```
-  SKILL REPO (open-scrollytelling)          GENERATED PROJECT
+  SKILL REPO (scrollytelling)              GENERATED PROJECT
   ─────────────────────────────            ─────────────────
   SKILL.md                                 app/{page,layout}.tsx
   LICENSE · README · .github/ci            app/globals.css
@@ -323,7 +323,7 @@ Synthesized from the findings above. Each task derives from a specific finding.
 
 - [ ] **T1 (P1, human: ~3h / CC: ~20min)** — spec — Rewrite the spec to match every review decision
   - Surfaced by: Outside voice #2 — the spec still specifies a blocking preload, and the 50-frame default is *derived from* that blocking preload; Lenis, the pure functions, the poster, and the report appear nowhere
-  - Files: `docs/superpowers/specs/2026-08-04-open-scrollytelling-design.md`
+  - Files: `docs/superpowers/specs/2026-08-04-scrollytelling-design.md`
   - Verify: re-read the spec; every row of the decision table above is present
 - [ ] **T2 (P1, human: ~2h / CC: ~10min)** — scroll-math — Split contain (desktop) from capped zoom (mobile) in `computeScale`
   - Surfaced by: Section 1 finding 1.1 + outside voice #1 (both models agree)
@@ -414,7 +414,7 @@ Synthesized from the findings above. Each task derives from a specific finding.
   - Files: `templates/gitignore.template`, `README.md`
   - Verify: `gitignore.template` does NOT contain `public/frames/`
 
-Task detail: `~/.gstack/projects/open-scrollytelling/tasks-ceo-review-*.jsonl` (23 lines, for
+Task detail: `~/.gstack/projects/scrollytelling/tasks-ceo-review-*.jsonl` (23 lines, for
 `/autoplan` to aggregate).
 
 ---

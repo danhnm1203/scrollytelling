@@ -1,4 +1,4 @@
-# open-scrollytelling
+# scrollytelling
 
 Turn a video into a scroll-scrubbed landing page. The clip advances frame by
 frame as the visitor scrolls, with copy fading in over it.
@@ -12,10 +12,10 @@ is published.
 
 ```bash
 # Run it without installing — first run takes a minute, then it is cached
-npx github:danhnm1203/open-scrollytelling <command>
+npx github:danhnm1203/scrollytelling <command>
 
 # Or install it, if you will use it more than once
-npm i -g github:danhnm1203/open-scrollytelling
+npm i -g github:danhnm1203/scrollytelling
 ```
 
 Node 20 or newer. Nothing else to install: `sharp` and `ffmpeg-static` come with
@@ -26,34 +26,34 @@ it and bring their own binaries.
 Claude Code, as a plugin:
 
 ```
-/plugin marketplace add danhnm1203/open-scrollytelling
-/plugin install open-scrollytelling@open-scrollytelling
+/plugin marketplace add danhnm1203/scrollytelling
+/plugin install scrollytelling@scrollytelling
 ```
 
 Codex and other agents:
 
 ```bash
-npx skills add danhnm1203/open-scrollytelling
+npx skills add danhnm1203/scrollytelling
 ```
 
-Or clone and copy `skills/open-scrollytelling` into `~/.claude/skills/`. Either
-way, start a new session and call it as `/open-scrollytelling`.
+Or clone and copy `skills/scrollytelling` into `~/.claude/skills/`. Either
+way, start a new session and call it as `/scrollytelling`.
 
 ## Quickstart
 
 ```bash
 # 1. Look at the footage before deciding what the page says
-open-scrollytelling frames --preview ./clip.mp4
+scrollytelling frames --preview ./clip.mp4
 
 # 2. Create the project
-open-scrollytelling scaffold ./my-site
+scrollytelling scaffold ./my-site
 cd my-site && npm install
 
 # 3. Turn the clip into a measured frame sequence
-open-scrollytelling frames ../clip.mp4 . --frames 50
+scrollytelling frames ../clip.mp4 . --frames 50
 
 # 4. Write your beats in components/story.ts, then check them
-open-scrollytelling frames --check .
+scrollytelling frames --check .
 
 # 5. Run it
 npm run dev
@@ -86,10 +86,10 @@ background.
 ## Commands
 
 ```
-open-scrollytelling scaffold <project_dir> [--force] [--diff]
-open-scrollytelling frames <video|image-dir> <project_dir> [options]
-open-scrollytelling frames --preview <video>
-open-scrollytelling frames --check <project_dir>
+scrollytelling scaffold <project_dir> [--force] [--diff]
+scrollytelling frames <video|image-dir> <project_dir> [options]
+scrollytelling frames --preview <video>
+scrollytelling frames --check <project_dir>
 ```
 
 | Option | Default | |

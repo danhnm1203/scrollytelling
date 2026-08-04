@@ -1,7 +1,7 @@
-# Eng Review — open-scrollytelling (Phase A)
+# Eng Review — scrollytelling (Phase A)
 
 2026-08-04 · Branch: `main` · Commit: `13d82bc`
-Reviewed: [design, revision 2](../superpowers/specs/2026-08-04-open-scrollytelling-design.md)
+Reviewed: [design, revision 2](../superpowers/specs/2026-08-04-scrollytelling-design.md)
 Mode: FULL_REVIEW · Outside voice: Claude subagent (Codex not installed)
 
 ---
@@ -125,7 +125,7 @@ changes page height → drops the visitor somewhere else in the story. No test, 
 nothing visible goes wrong. This is the worst failure shape: the page reports nothing and simply
 reads as "janky."
 
-Test plan for `/qa`: `~/.gstack/projects/open-scrollytelling/danhnguyen-main-eng-review-test-plan-*.md`
+Test plan for `/qa`: `~/.gstack/projects/scrollytelling/danhnguyen-main-eng-review-test-plan-*.md`
 
 ## Section 4 — Performance
 
@@ -210,10 +210,10 @@ Continuing from T1–T23 in the CEO review. 17 new tasks from this round.
   - Surfaced by: Architecture A1 — the root tests guard a different copy than the page runs
   - Files: `lib/scroll-math.mjs`, `tests/parity.test.js`, `scripts/scaffold.mjs`
   - Verify: change one character in the `templates/` copy → `node --test` fails
-- [ ] **E2 (P1, human: ~1d / CC: ~30min)** — distribution — Publish the `open-scrollytelling` npm CLI
+- [ ] **E2 (P1, human: ~1d / CC: ~30min)** — distribution — Publish the `scrollytelling` npm CLI
   - Surfaced by: Architecture A2 — no install or update path for the skill
   - Files: `package.json` (bin), `.github/workflows/release.yml`, `README.md`, `SKILL.md`
-  - Verify: `npx open-scrollytelling --help` works from a clean machine
+  - Verify: `npx scrollytelling --help` works from a clean machine
 - [ ] **E3 (P1, human: ~1h / CC: ~8min)** — frames.mjs — Step 0 dependency self-check
   - Surfaced by: Architecture A3 — the workflow's first command fails on a fresh clone
   - Files: `scripts/frames.mjs`
