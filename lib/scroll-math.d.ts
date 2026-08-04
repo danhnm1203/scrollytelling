@@ -41,6 +41,20 @@ export declare function computeScale(
   sequence: SequenceShape,
 ): number;
 
+/** How many decoded frames fit in a byte budget. */
+export declare function framesInBudget(
+  budgetBytes: number,
+  width: number,
+  height: number,
+): number;
+
+/** The inclusive range of frames allowed to stay decoded, centred on `current`. */
+export declare function decodeWindow(
+  current: number,
+  totalFrames: number,
+  capacity: number,
+): { from: number; to: number };
+
 export type BeatShape = {
   readonly at: number;
   readonly align: "left" | "center" | "right";
