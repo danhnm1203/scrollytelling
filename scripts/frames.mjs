@@ -58,6 +58,15 @@ const HEAVY_SEQUENCE_BYTES = 6 * 1024 * 1024;
 /** How many columns the luminance table has. Six reads without wrapping. */
 const REPORT_BUCKETS = 6;
 
+/**
+ * How many frames may be unreadable before the run is abandoned.
+ *
+ * Below this the input is fine and one file is damaged; skipping it costs the
+ * builder nothing. Above it the input itself is wrong, and quietly producing a
+ * much shorter animation would hide that.
+ */
+const MAX_UNREADABLE_FRACTION = 0.1;
+
 /** Above this, interpolating the background between frames is visibly a pulse. */
 const PULSING_BACKGROUND_DELTA = 40;
 
@@ -258,6 +267,45 @@ async function processFrame(sharp, sourcePath, targetPath, { width, height, qual
 }
 
 /**
+ * Drops sources sharp cannot read, so every sequence is built from the same set.
+ *
+ * Validated up front rather than handled mid-encode: a frame that fails partway
+ * through would leave the sequences different lengths, and the page indexes
+ * frames by position. A gap becomes a 404 at runtime, which shows as the
+ * animation sticking — read as a scrub bug rather than a missing file.
+ */
+async function usableSources(sharp, files) {
+  const usable = [];
+  const unreadable = [];
+
+  for (const file of files) {
+    try {
+      await sharp(file).metadata();
+      usable.push(file);
+    } catch {
+      unreadable.push(basename(file));
+    }
+  }
+
+  if (usable.length === 0) {
+    throw new PipelineError(
+      `none of the ${files.length} frames could be read.\n` +
+        "  Is this a directory of images, or a video this build of ffmpeg understands?",
+    );
+  }
+
+  if (unreadable.length / files.length > MAX_UNREADABLE_FRACTION) {
+    throw new PipelineError(
+      `${unreadable.length} of ${files.length} frames are unreadable, which is too many to skip.\n` +
+        `  ${unreadable.slice(0, 5).join(", ")}${unreadable.length > 5 ? ", …" : ""}\n` +
+        "  Something is wrong with the input rather than with one file.",
+    );
+  }
+
+  return { usable, unreadable };
+}
+
+/**
  * The dimensions every frame is resized to.
  *
  * Small aspect differences are normalized: a render that came out a pixel short
@@ -424,11 +472,19 @@ async function frames(positionals, flags) {
   const final = join(projectDir, "public", "frames");
 
   try {
-    const { sources, warnings } = await gatherSources(input, requested, workDir, ffmpegPath);
+    let { sources, warnings } = await gatherSources(input, requested, workDir, ffmpegPath);
 
     if (sources.length < requested) {
       warnings.push(`only ${sources.length} frames available; using all of them`);
     }
+
+    const { usable, unreadable } = await usableSources(sharp, sources);
+    if (unreadable.length > 0) {
+      warnings.push(
+        `skipped ${unreadable.length} unreadable frame(s): ${unreadable.join(", ")}`,
+      );
+    }
+    sources = usable;
 
     const source = await resolveGeometry(sharp, sources, maxWidth);
     const plans = planSequences({ ...source, maxWidth, focus, skipPortrait });
