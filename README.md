@@ -22,7 +22,8 @@ No accounts, no API keys, nothing to install system-wide.
 
 - [Requirements](#requirements)
 - [Installation](#installation)
-- [Quickstart](#quickstart)
+- [Quickstart with a coding agent](#quickstart-with-a-coding-agent)
+- [Quickstart with the CLI](#quickstart-with-the-cli)
 - [Why it looks right](#why-it-looks-right)
 - [CLI reference](#cli-reference)
 - [What you get](#what-you-get)
@@ -67,7 +68,46 @@ npx skills add danhnm1203/scrollytelling
 Or clone and copy `skills/scrollytelling` into `~/.claude/skills/`. Either way,
 start a new session and call it as `/scrollytelling`.
 
-## Quickstart
+## Quickstart with a coding agent
+
+Once the skill is installed, hand it the footage and say what the page is for:
+
+```
+/scrollytelling <video-or-image-dir> [project-dir] [what the page is about]
+```
+
+The path is the only part that has to be there. Everything else is a prompt —
+say as much or as little as you want about the story:
+
+```
+/scrollytelling ./watch-teardown.mp4 ./watch-site
+```
+
+```
+/scrollytelling turn ./drone-flyover.mp4 into a landing page for a vineyard
+tour. Three beats, calm and unhurried, and keep the copy off the horizon.
+```
+
+```
+/scrollytelling ./renders/ is an ordered image sequence of our headphones
+rotating. Build it into ./hp-page — two beats only, and the subject sits
+left of centre rather than middle.
+```
+
+The agent runs the same pipeline described below, and does the two parts that
+need judgement rather than a flag:
+
+- **It looks at the footage.** It extracts preview frames, reads them, and writes
+  your beats against what is actually on screen instead of dropping them on
+  `0.3 / 0.6 / 0.9`.
+- **It checks its own work in a browser.** It builds the page, scrubs it at
+  1440×900 and 375×812, screenshots each beat and judges the contrast, and
+  confirms the canvas really changes when scrolling back up.
+
+It will tell you what it chose and why. The project it leaves behind is a normal
+Next.js project — see [What you get](#what-you-get).
+
+## Quickstart with the CLI
 
 Five steps, start to finish. The order matters: the footage decides the story,
 not the other way round, so you look at the clip before writing a word of copy.
