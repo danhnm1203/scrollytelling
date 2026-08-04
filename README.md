@@ -69,28 +69,97 @@ start a new session and call it as `/scrollytelling`.
 
 ## Quickstart
 
+Five steps, start to finish. The order matters: the footage decides the story,
+not the other way round, so you look at the clip before writing a word of copy.
+
+### 1. Look at the footage
+
 ```bash
-# 1. Look at the footage before deciding what the page says
 scrollytelling frames --preview ./clip.mp4
+```
 
-# 2. Create the project
+Writes five stills, evenly spaced across the clip, to a temporary directory and
+prints the path. Open them. You are looking for where the frame is busy, where it
+is dark enough to carry white text, and what the clip is about at each point in
+its run.
+
+Nothing is created in your project yet — this step is free, and you can repeat it
+on different clips until one is right.
+
+### 2. Create the project
+
+```bash
 scrollytelling scaffold ./my-site
-cd my-site && npm install
+cd my-site
+npm install
+```
 
-# 3. Turn the clip into a measured frame sequence
+You now have a normal Next.js project. `scaffold` never overwrites a file you
+have edited, so it is safe to re-run later — see
+[Keeping up with template fixes](#keeping-up-with-template-fixes).
+
+### 3. Turn the clip into a measured frame sequence
+
+```bash
 scrollytelling frames ../clip.mp4 . --frames 50
+```
 
-# 4. Write your beats in components/story.ts, then check them
+This extracts, measures and encodes. It writes the images to `public/frames/` and
+the contract they are described by to `components/frames.ts`, and prints a table
+like this:
+
+```
+Wrote 100 frames across landscape 1280x720, portrait 720x1280 (4.31 MB)
+
+landscape — how bright the footage is, by region and scroll position
+           0%  17%  33%  50%  67%  83%
+  left   0.12 0.18 0.44 0.71 0.68 0.55
+  centre 0.31 0.29 0.35 0.52 0.49 0.44
+  right  0.09 0.11 0.14 0.22 0.61 0.58
+  Copy over left and right will need a heavy scrim somewhere in the scroll.
+```
+
+Read it as: how bright each third of the frame is, at each point in the scroll.
+`0.0` is black, `1.0` is white. Above about `0.55` — the threshold `--check` uses
+in the next step — is a bad place to put white text.
+
+Start with 50 frames. Raise it if the scrub feels choppy or the report warns that
+the background pulses between frames; lower it if `public/frames/` gets heavy.
+
+### 4. Write your beats, then check them
+
+Open `components/story.ts` — the only file you need to edit. Each beat declares
+`at`, the scroll position from 0 to 1 where it should be clearest:
+
+```ts
+sections: [
+  { at: 0.0,  align: "center", heading: "Orbit", body: "Scroll to take it apart." },
+  { at: 0.3,  align: "left",   heading: "Nothing wasted", body: "…" },
+  { at: 0.6,  align: "right",  heading: "Built to be understood", body: "…" },
+]
+```
+
+Place them against the table from step 3. The `left` beat above sits at `0.3`,
+where the left third reads `0.44` — comfortable. Move it to `0.6` and it lands on
+`0.71`, which is too bright to read against. Then check your work:
+
+```bash
 scrollytelling frames --check .
+```
 
-# 5. Run it
+It reads the beats you wrote, compares each against the frames that will actually
+be behind it, and names the ones that will be hard to read and where to move
+them. Adjust `at` or `align` and run it again — it re-reads the generated
+contract, so it costs nothing.
+
+### 5. Run it
+
+```bash
 npm run dev
 ```
 
-Step 1 exists because the footage should decide the story rather than the other
-way round. Step 3 prints how bright the clip is by region and scroll position;
-write your beats against that table, and step 4 names any that will be hard to
-read and where to move them.
+Scroll the page. Check it at phone width too — the portrait sequence built in
+step 3 is what you will see there.
 
 ## Why it looks right
 
