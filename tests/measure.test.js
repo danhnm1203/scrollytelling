@@ -33,9 +33,14 @@ describe("lumaOf", () => {
     // 1e-16 shortfall on a value that picks a scrim opacity means nothing.
     assert.ok(Math.abs(lumaOf(255, 255, 255) - 1) < 1e-9);
     assert.equal(lumaOf(0, 0, 0), 0);
-    // Green carries most of perceived brightness; blue carries least.
-    assert.ok(lumaOf(0, 255, 0) > lumaOf(255, 0, 0));
-    assert.ok(lumaOf(255, 0, 0) > lumaOf(0, 0, 255));
+
+    // The actual coefficients, not just their ordering. Asserting only that
+    // green beats red beats blue passes for any number of wrong weightings —
+    // a deliberate 0.2126/0.7152 -> 0.2526/0.6752 shift survived it, and
+    // nothing else in the suite noticed either.
+    assert.ok(Math.abs(lumaOf(255, 0, 0) - 0.2126) < 1e-6, `red ${lumaOf(255, 0, 0)}`);
+    assert.ok(Math.abs(lumaOf(0, 255, 0) - 0.7152) < 1e-6, `green ${lumaOf(0, 255, 0)}`);
+    assert.ok(Math.abs(lumaOf(0, 0, 255) - 0.0722) < 1e-6, `blue ${lumaOf(0, 0, 255)}`);
   });
 
   it("returns a value in 0..1", () => {
