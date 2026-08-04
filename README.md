@@ -52,7 +52,7 @@ background.
 ## Commands
 
 ```
-open-scrolltelling scaffold <project_dir> [--force]
+open-scrolltelling scaffold <project_dir> [--force] [--diff]
 open-scrolltelling frames <video|image-dir> <project_dir> [options]
 open-scrolltelling frames --preview <video>
 open-scrolltelling frames --check <project_dir>
@@ -89,6 +89,26 @@ my-site/
 
 Once generated, the project is yours. `scaffold` never overwrites a file you have
 edited unless you pass `--force`.
+
+### Keeping up with template fixes
+
+Scaffolding records what the template looked like at the time in
+`.scrolltelling-version`. Later, `scaffold <project_dir> --diff` reports what has
+moved since:
+
+```
+Changed in the template, untouched in your project:
+  components/ScrollSequence.tsx
+  Safe to take: copy them from a fresh scaffold in a temporary directory.
+
+Changed in the template AND edited by you:
+  app/globals.css
+  Your call. Adopting these would discard your edits.
+```
+
+It only reports. Adopting a change is your decision — the code is yours once it
+is generated, and a tool that rewrote it on your behalf would make re-running
+this something to be afraid of.
 
 ## Frames are committed to git
 

@@ -7,7 +7,7 @@ import { parseArgs, UsageError } from "../lib/cli-args.mjs";
 const HELP = `open-scrolltelling — turn a video into a scroll-scrubbed Next.js landing page
 
 Usage
-  open-scrolltelling scaffold <project_dir> [--force]
+  open-scrolltelling scaffold <project_dir> [--force] [--diff]
   open-scrolltelling frames <video|image-dir> <project_dir> [options]
   open-scrolltelling frames --preview <video>
   open-scrolltelling frames --check <project_dir>
@@ -21,6 +21,7 @@ frames options
 
 scaffold options
   --force           overwrite existing template files
+  --diff            report template changes since this project was generated
 
 Other
   -h, --help        show this help
