@@ -76,20 +76,72 @@ Start a new session and it is available as **`/scrollytelling`**.
 2. **Read those frames** and propose copy beats from what is actually on screen.
    Place beats against the footage, not on round numbers — `0.30 / 0.60 / 0.90` are
    placeholders.
-3. `scrollytelling scaffold <project_dir>`
-4. `cd <project_dir> && npm install` — only next/react/react-dom, so it is fast.
-5. `scrollytelling frames <video> <project_dir> --frames 50 [--focus 0.5]`
+3. **Agree the page before building it.** One short design doc: the page flow, the
+   visual language, and what each beat says. The scrubber is a hero, not a whole
+   page — see "The page below the hero".
+4. `scrollytelling scaffold <project_dir>`
+5. `cd <project_dir> && npm install` — only next/react/react-dom, so it is fast.
+6. `scrollytelling frames <video> <project_dir> --frames 50 [--focus 0.5]`
    — read the luminance table it prints. `--focus` is where the portrait crop sits
    horizontally, 0 to 1; the subject is not always centred.
-6. Edit `components/story.ts`.
-7. `scrollytelling frames --check <project_dir>` — per-beat readability warnings.
-8. `npm run build && npm run start -- -p 3737`
-9. **Measurement checkpoint** (below).
-10. Verify, then report.
+7. Edit `components/story.ts`.
+8. `scrollytelling frames --check <project_dir>` — per-beat readability warnings.
+9. Build the rest of the page.
+10. `npm run build && npm run start -- -p 3737`
+11. **Measurement checkpoint** (below).
+12. Verify, then report.
 
 Two sequences are built from one clip: the source as shot, and a portrait crop, so
 a phone gets a composition framed for a phone. `--skip-portrait` opts out of the
 extra weight.
+
+## Why a frame sequence and not a `<video>`
+
+Scrubbing a `<video>` by writing `currentTime` looks like the simpler design. Do
+not switch to it. A normal H.264 delivery encode is built for linear playback and
+carries very few keyframes — one hand-built page tried this with a clip holding 5
+keyframes across 240 frames, and every seek past the first sparse GOP threw
+`PIPELINE_ERROR_DECODE`. The file was not corrupt; it was simply not seekable.
+
+Making it seekable means re-encoding all-intra (`-g 1 -keyint_min 1
+-sc_threshold 0`), which nearly tripled that clip's size — and then you still own
+a decode-error retry path, a metadata-readiness race against hydration, and
+per-browser seek behaviour. Encoding to webp frames up front costs a build step
+and removes all four problems: every frame is independently decodable by
+definition, and scrubbing backwards is the same cost as forwards.
+
+## The page below the hero
+
+`scaffold` gives you the scrubbing hero and an `sr-only` story outline. That is
+the mechanism, not the deliverable. A landing page needs sections under it, and
+they are yours to write. A flow that works:
+
+1. **Hero** — the scroll sequence, beats fading over it
+2. **Feature sections** — one idea each, alternating text and visual
+3. **A number row** — two or three stats that matter
+4. **A real table** — specs, pricing, or whatever the concrete detail is
+5. **Footer CTA**
+
+Constraints that hold while you build it:
+
+- **No new runtime dependencies.** next, react, react-dom and tailwind only. A
+  reveal-on-scroll wrapper is ~40 lines of `IntersectionObserver`; reach for an
+  animation library and the generated project stops being cheap to deploy.
+- **Reuse the frames you already encoded** for static section imagery. They are
+  in `public/frames/`, already sized and optimised. Pulling fresh stills with
+  ffmpeg means shipping another copy of the same pixels.
+- **Keep `app/page.tsx`'s outline as the only `<h1>`.** Section headings are
+  `<h2>`. The canvas is `aria-hidden` decoration; the outline is what a screen
+  reader and a crawler actually read.
+- **Honour `prefers-reduced-motion`** in anything you add. The scrub itself is
+  driven by the reader's own scrolling, but reveals and count-ups are not.
+- Server components by default. Only what listens to scroll is `"use client"`.
+
+Do not give beats explicit fade windows. A beat declares only `at`; the crossfade
+is derived from where its neighbours sit, so the opacities always sum to 1 and no
+scroll position is ever left with no copy on it. The hand-built page mentioned
+above wrote its own four-point windows and shipped a dead zone at ~75% scroll
+that had to be patched. Move `at`, add a beat, delete one — nothing else changes.
 
 ## Keeping a generated project current
 
@@ -115,7 +167,13 @@ scrolls natively today and works. Do not add it without running the comparison.
 
 ## Verification
 
-Use the `/browse` skill (never Chrome MCP tools). Check at 1440×900 and 375×812:
+`npm run build` must finish with no type or lint errors before you verify
+anything — a page that does not build is not a page.
+
+Then use the `/browse` skill (never Chrome MCP tools). Check at 1440×900, 768×1024
+and 375×812. The middle width is worth the extra pass: it is where a two-column
+layout collapses, and it is already being served the portrait crop rather than the
+landscape sequence — the choice flips at a square viewport, not at a phone width:
 
 1. The sequence loaded; no corrupt-index warnings in the dev console.
 2. The canvas changes between scroll positions — **and when scrolling back up**.
