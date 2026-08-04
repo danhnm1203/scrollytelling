@@ -35,10 +35,12 @@ import { SEQUENCES, framePath, type Sequence } from "@/components/frames";
 import { story, type Beat } from "@/components/story";
 import {
   computeScale,
+  damp,
   decodeWindow,
   fadeOpacity,
   framesInBudget,
   frameIndex,
+  hasSettled,
   lerpColor,
   scrimOpacity,
   scrollHeightVh,
@@ -55,6 +57,22 @@ const VERTICAL_ANCHOR = 0.45;
 
 /** Once someone has scrolled this far, they know the page scrolls. */
 const HINT_FADES_AT = 0.02;
+
+/**
+ * How long the sequence takes to catch up with the scroll position, in seconds.
+ *
+ * Locking the drawn frame 1:1 to scroll position is the obvious design, and it
+ * is what makes a sequence look mechanical. At 50 frames over 500vh one frame
+ * covers roughly 10vh, so a single trackpad flick crosses several frames
+ * between two paints and the jump is visible. Easing spreads that over a few
+ * frames instead.
+ *
+ * Under about 0.2 the smoothing stops being perceptible and you may as well not
+ * have it. Past about 0.6 the image starts feeling detached from the hand doing
+ * the scrolling, which reads as lag rather than as polish. Set it to 0 for a
+ * hard 1:1 lock — nothing else has to change.
+ */
+const SCRUB_SECONDS = 0.35;
 
 /**
  * How much decoded imagery may stay resident.
@@ -105,6 +123,12 @@ export function ScrollSequence() {
   const rafRef = useRef(0);
   /** Latest story position, kept in a ref so a resize can read it without staleness. */
   const progressRef = useRef(0);
+  /** The position actually being drawn, which trails the scroll position. */
+  const easedRef = useRef(0);
+  /** Timestamp of the previous paint, for a frame-rate independent step. */
+  const lastPaintRef = useRef(0);
+  /** False until the first paint of a run, which snaps instead of easing. */
+  const primedRef = useRef(false);
 
   // Seeded with the first sequence rather than null so the server renders the
   // real page. Starting empty meant the pre-JavaScript HTML said "no frames
@@ -261,7 +285,7 @@ export function ScrollSequence() {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    const draw = () => {
+    const draw = (now: number) => {
       rafRef.current = 0;
 
       const dpr = Math.min(MAX_DPR, devicePixelRatio || 1);
@@ -273,11 +297,37 @@ export function ScrollSequence() {
         canvas.height = Math.round(vh * dpr);
       }
 
-      const p = scrollProgress(scrollY, document.body.scrollHeight, vh);
-      const exact = frameIndex(p, sequence.totalFrames);
+      // Where the visitor is, which is not the same as what gets drawn.
+      // progressRef stays on the true position: a resize restores the scroll
+      // offset from it, and restoring a position that is mid-catch-up would
+      // move the visitor slightly every time the viewport changed.
+      const target = scrollProgress(scrollY, document.body.scrollHeight, vh);
+      progressRef.current = target;
+
+      // The first paint of a run snaps. Easing from wherever the last run
+      // stopped would sweep the whole sequence on a mid-page reload, and on a
+      // rotation would fight the scroll restore that just ran.
+      const step = lastPaintRef.current ? now - lastPaintRef.current : 0;
+      lastPaintRef.current = now;
+
+      let eased = primedRef.current
+        ? damp(easedRef.current, target, SCRUB_SECONDS, step)
+        : target;
+      primedRef.current = true;
+      if (hasSettled(eased, target, sequence.totalFrames)) eased = target;
+      easedRef.current = eased;
+
+      // Scheduled here rather than at the end: the draw below returns early
+      // when no frame is decoded yet, and stopping the loop there would leave
+      // the sequence parked wherever it had eased to.
+      if (eased !== target) schedule();
+
+      // Everything the page renders comes off the eased position, so the
+      // frame, the background, the beats and the progress bar stay in step
+      // with each other rather than the text arriving ahead of the image.
+      const exact = frameIndex(eased, sequence.totalFrames);
       frameRef.current = exact;
-      progressRef.current = p;
-      setProgress(p);
+      setProgress(eased);
 
       const lo = Math.floor(exact);
       const hi = Math.min(sequence.totalFrames - 1, Math.ceil(exact));
@@ -310,14 +360,17 @@ export function ScrollSequence() {
       ctx.drawImage(img, (vw - w) / 2, (vh - h) * VERTICAL_ANCHOR, w, h);
     };
 
-    const schedule = () => {
+    function schedule() {
       if (rafRef.current) return;
       rafRef.current = requestAnimationFrame(draw);
-    };
+    }
     // The decoder calls this when a frame arrives, so a newly decoded frame is
     // painted rather than waiting for the next scroll event.
     scheduleDrawRef.current = schedule;
 
+    // Snap on the first paint of this run, and measure the step from it.
+    primedRef.current = false;
+    lastPaintRef.current = 0;
     schedule();
     addEventListener("scroll", schedule, { passive: true });
     addEventListener("resize", schedule);

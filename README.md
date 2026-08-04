@@ -40,16 +40,15 @@ package and bring their own binaries.
 
 ## Installation
 
-Not on npm yet, so both forms point at GitHub. Drop the `github:` prefix once it
-is published.
-
 ```bash
 # Run it without installing — first run takes a minute, then it is cached
-npx github:danhnm1203/scrollytelling <command>
+npx @danhnm1203/scrollytelling <command>
 
 # Or install it, if you will use it more than once
-npm i -g github:danhnm1203/scrollytelling
+npm i -g @danhnm1203/scrollytelling
 ```
+
+Either form gives you a `scrollytelling` command.
 
 ### Using it from a coding agent
 
@@ -220,6 +219,19 @@ It also builds **two sequences**, landscape and a portrait crop, and the page
 picks whichever suits the screen. A 16:9 frame cannot fill a 9:19.5 phone without
 cropping most of its width, so without this a phone shows a strip surrounded by
 background.
+
+**The sequence eases toward the scroll position rather than snapping to it.**
+Locking the drawn frame 1:1 to scroll is the obvious design and it is what makes
+a sequence look mechanical: at 50 frames over 500vh a single frame covers about
+10vh, so one trackpad flick crosses several frames between two paints and the
+jump is visible. The page spends about a third of a second catching up instead,
+which spreads that jump over enough frames to read as motion.
+
+This is not smooth scrolling. The scroll position stays exactly the browser's —
+no wheel events are intercepted, no scrolling is virtualised, and anchor links,
+scrollbars and Find-in-page all behave normally. Only what is drawn is eased.
+The knob is `SCRUB_SECONDS` in `components/ScrollSequence.tsx`; set it to `0`
+for a hard 1:1 lock.
 
 ## Reduced motion
 

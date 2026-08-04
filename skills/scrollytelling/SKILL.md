@@ -31,11 +31,9 @@ starts in a couple of seconds. Good for trying it, or for a machine you touch on
 Install it if you are going to use it repeatedly:
 
 ```bash
-npm i -g github:danhnm1203/scrollytelling
+npm i -g @danhnm1203/scrollytelling
 scrollytelling --version
 ```
-
-Once the package is published, drop the `github:` prefix from either form.
 
 Node 20 or newer. `sharp` and `ffmpeg-static` come with it and bring their own
 binaries, so nothing needs installing system-wide.
@@ -145,6 +143,35 @@ is derived from where its neighbours sit, so the opacities always sum to 1 and n
 scroll position is ever left with no copy on it. The hand-built page mentioned
 above wrote its own four-point windows and shipped a dead zone at ~75% scroll
 that had to be patched. Move `at`, add a beat, delete one — nothing else changes.
+
+## How the scrub is driven
+
+Native scroll, read in a `requestAnimationFrame` loop. The drawn position eases
+toward the scroll position over `SCRUB_SECONDS` (`components/ScrollSequence.tsx`,
+0.35 by default) rather than locking to it 1:1, which is what stops a coarse
+sequence from stepping under a fast flick. The loop stops once it has caught up,
+so an idle page schedules no frames at all — verify that if you touch the loop:
+
+```
+$B js "(()=>{const o=requestAnimationFrame.bind(window);window.__n=0;
+window.requestAnimationFrame=c=>{window.__n++;return o(c)};return 'patched'})()"
+# wait a few seconds without scrolling
+$B js "window.__n"   # must be 0
+```
+
+Three things follow from this that are easy to get wrong:
+
+- **This is not smooth scrolling and does not replace it.** The scroll position
+  is the browser's own; nothing is intercepted or virtualised. The measurement
+  checkpoint below still stands — smooth scrolling remains uninstalled and still
+  needs evidence before it goes in.
+- **Do not add GSAP, ScrollTrigger or Lenis.** The idea of a numeric scrub comes
+  from `basementstudio/scrollytelling`, which is a fine library and a 40KB
+  dependency for one exponential. `damp` in `lib/scroll-math.mjs` is the whole
+  of it, and it is unit-tested for frame-rate independence.
+- **Everything renders off the eased position** — frame, background, beats,
+  progress bar. Do not wire a new overlay to raw `scrollY`; it will arrive ahead
+  of the image and the mismatch is visible during a flick.
 
 ## Reduced motion
 
