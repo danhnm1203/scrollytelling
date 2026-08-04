@@ -1,6 +1,11 @@
 ---
 name: open-scrolltelling
-description: Turn a video (or an ordered image folder) into a scroll-scrubbed Next.js landing page — the clip advances frame by frame as the visitor scrolls, with copy beats fading in over it. Use for a scrollytelling hero, a scroll-linked product reveal, an "Apple-style" scroll animation, or to turn footage into a landing page.
+description: Turn a video (or an ordered image folder) into a scroll-scrubbed Next.js landing page — the clip advances frame by frame as the visitor scrolls, with copy beats fading in over it. Use for a scrollytelling hero, a scroll-linked product reveal, an "Apple-style" scroll animation, a scroll-linked image sequence, or to turn footage into a landing page.
+argument-hint: "[video-or-image-dir] [project-dir]"
+license: MIT
+metadata:
+  version: "0.1.0"
+  repository: "https://github.com/danhnm1203/open-scrolltelling"
 ---
 
 # open-scrolltelling
@@ -35,16 +40,20 @@ Once the package is published, drop the `github:` prefix from either form.
 Node 20 or newer. `sharp` and `ffmpeg-static` come with it and bring their own
 binaries, so nothing needs installing system-wide.
 
-**The skill.** Put this file where the agent looks for skills:
+**The skill.** Clone the repo and run the installer:
 
 ```bash
 git clone https://github.com/danhnm1203/open-scrolltelling.git ~/src/open-scrolltelling
-mkdir -p ~/.claude/skills/open-scrolltelling
-ln -s ~/src/open-scrolltelling/SKILL.md ~/.claude/skills/open-scrolltelling/SKILL.md
+cd ~/src/open-scrolltelling && ./install-skill.sh
 ```
 
-A symlink rather than a copy, so `git pull` updates the skill too. Copy it instead
-if you would rather pin a version.
+Start a new agent session and it is available as **`/open-scrolltelling`**.
+
+The installer symlinks, so `git pull` updates the skill too; pass `--copy` to pin
+this version instead. It exists mainly to get one detail right: the slash command
+resolves against the *directory* name under `~/.claude/skills/`, which must match
+the `name:` in this file exactly. Getting that wrong fails silently — the skill
+simply never appears.
 
 ## Workflow
 

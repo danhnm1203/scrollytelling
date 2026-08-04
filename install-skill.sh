@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+#
+# Installs this skill so an agent can invoke it as /open-scrolltelling.
+#
+# The directory name is what the slash command resolves against — it has to
+# match the `name:` in SKILL.md exactly. That is the one detail worth automating,
+# because getting it wrong fails silently: the skill simply never appears.
+#
+#   ./install-skill.sh              symlink, so `git pull` updates the skill
+#   ./install-skill.sh --copy       copy instead, to pin this version
+
+set -euo pipefail
+
+SKILL_NAME="open-scrolltelling"
+SOURCE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SOURCE_FILE="$SOURCE_DIR/SKILL.md"
+TARGET_DIR="${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}/$SKILL_NAME"
+
+[ -f "$SOURCE_FILE" ] || { echo "No SKILL.md beside this script." >&2; exit 1; }
+
+# The name in the file is the source of truth; the directory has to follow it.
+declared="$(awk -F': *' '/^name:/ {print $2; exit}' "$SOURCE_FILE" | tr -d '\r')"
+if [ "$declared" != "$SKILL_NAME" ]; then
+  echo "SKILL.md declares name '$declared' but this script installs '$SKILL_NAME'." >&2
+  echo "They must match or the slash command will not resolve." >&2
+  exit 1
+fi
+
+mkdir -p "$TARGET_DIR"
+
+if [ "${1:-}" = "--copy" ]; then
+  cp "$SOURCE_FILE" "$TARGET_DIR/SKILL.md"
+  how="copied"
+else
+  ln -sf "$SOURCE_FILE" "$TARGET_DIR/SKILL.md"
+  how="symlinked"
+fi
+
+echo "Skill $how to $TARGET_DIR/SKILL.md"
+echo
+
+if command -v open-scrolltelling >/dev/null 2>&1; then
+  echo "CLI: $(open-scrolltelling --version) — ready."
+else
+  echo "The CLI is not on PATH yet. The skill needs it:"
+  echo "  npm i -g github:danhnm1203/open-scrolltelling"
+  echo "or run it per-invocation with npx github:danhnm1203/open-scrolltelling"
+fi
+
+echo
+echo "Start a new agent session, then call it with /$SKILL_NAME"

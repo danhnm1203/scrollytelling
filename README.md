@@ -21,6 +21,16 @@ npm i -g github:danhnm1203/open-scrolltelling
 Node 20 or newer. Nothing else to install: `sharp` and `ffmpeg-static` come with
 it and bring their own binaries.
 
+### Using it from a coding agent
+
+```bash
+git clone https://github.com/danhnm1203/open-scrolltelling.git ~/src/open-scrolltelling
+cd ~/src/open-scrolltelling && ./install-skill.sh
+```
+
+Start a new session and call it as `/open-scrolltelling`. The installer symlinks
+so `git pull` keeps it current; `--copy` pins this version.
+
 ## Quickstart
 
 ```bash
