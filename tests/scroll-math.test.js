@@ -14,6 +14,8 @@ import {
   frameIndex,
   selectSequence,
   computeScale,
+  damp,
+  hasSettled,
   lerpColor,
   scrollHeightVh,
 } from "../lib/scroll-math.mjs";
@@ -211,5 +213,77 @@ describe("scrollHeightVh", () => {
     const b = scrollHeightVh(300);
     assert.ok(b > a, `${a} then ${b} — the ceiling is back`);
     assert.ok(Math.abs(b / a - 2) < 0.01);
+  });
+});
+
+describe("damp", () => {
+  // The whole point is that the drawn position eases toward the scroll
+  // position rather than snapping to it. A hard 1:1 lock makes a coarse
+  // sequence step visibly under a fast flick: with 50 frames over 500vh, one
+  // trackpad gesture crosses several frames between two paints.
+
+  it("moves toward the target without overshooting it", () => {
+    const next = damp(0, 1, 0.4, 16);
+    assert.ok(next > 0, `${next} did not move`);
+    assert.ok(next < 1, `${next} overshot`);
+  });
+
+  it("converges on the target rather than stalling short of it", () => {
+    let v = 0;
+    for (let i = 0; i < 200; i++) v = damp(v, 1, 0.4, 16);
+    assert.ok(Math.abs(1 - v) < 1e-6, `settled at ${v}`);
+  });
+
+  it("closes about 95% of the gap in the time it is given", () => {
+    // This is what makes the number meaningful to whoever tunes it: 0.4 means
+    // four tenths of a second to catch up, not an arbitrary dial.
+    let v = 0;
+    for (let i = 0; i < 25; i++) v = damp(v, 1, 0.4, 16); // 25 * 16ms = 400ms
+    assert.ok(v > 0.9 && v < 0.99, `${v} after one time constant`);
+  });
+
+  it("lands in the same place regardless of frame rate", () => {
+    // Framerate independence is the reason this is exponential rather than a
+    // fixed per-frame fraction. A 120Hz display must not scrub twice as fast.
+    let at60 = 0;
+    for (let i = 0; i < 30; i++) at60 = damp(at60, 1, 0.4, 16.67);
+    let at120 = 0;
+    for (let i = 0; i < 60; i++) at120 = damp(at120, 1, 0.4, 8.33);
+    assert.ok(Math.abs(at60 - at120) < 0.005, `${at60} vs ${at120}`);
+  });
+
+  it("snaps when smoothing is off, so 1:1 stays available", () => {
+    assert.equal(damp(0, 1, 0, 16), 1);
+  });
+
+  it("does not leap when the tab was in the background", () => {
+    // A backgrounded tab delivers one enormous delta on return. Without a cap
+    // that single step is indistinguishable from no smoothing at all.
+    const huge = damp(0, 1, 0.4, 30_000);
+    assert.ok(huge <= 1, `${huge} overshot`);
+    const capped = damp(0, 1, 0.4, 200);
+    assert.equal(huge, capped, "a 30s delta should be clamped to the same step as 200ms");
+  });
+});
+
+describe("hasSettled", () => {
+  it("is true once the remaining gap is under a hundredth of a frame", () => {
+    // The loop has to stop. Easing toward a target it never exactly reaches
+    // would keep requestAnimationFrame alive for the life of the page.
+    assert.equal(hasSettled(0.5, 0.5, 50), true);
+    assert.equal(hasSettled(0.5, 0.5 + 1e-9, 50), true);
+  });
+
+  it("is false while there is still a visible frame to travel", () => {
+    assert.equal(hasSettled(0.0, 0.5, 50), false);
+    assert.equal(hasSettled(0.5, 0.52, 50), false);
+  });
+
+  it("scales with the frame count, not with progress", () => {
+    // The same progress gap is more frames in a longer sequence, so a fixed
+    // progress epsilon would stop early on long sequences and late on short.
+    const gap = 0.0005; // 0.0045 of a frame at 10 frames, 0.5 of one at 1000
+    assert.equal(hasSettled(0, gap, 10), true);
+    assert.equal(hasSettled(0, gap, 1000), false);
   });
 });

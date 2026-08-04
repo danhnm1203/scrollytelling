@@ -27,6 +27,24 @@ export declare function scrollProgress(
 /** Fractional frame index, clamped into range. */
 export declare function frameIndex(progress: number, totalFrames: number): number;
 
+/**
+ * Move `current` toward `target` over `seconds`, frame-rate independent.
+ * `seconds <= 0` returns `target`, which is a 1:1 lock to scroll position.
+ */
+export declare function damp(
+  current: number,
+  target: number,
+  seconds: number,
+  deltaMs: number,
+): number;
+
+/** Whether the eased position is near enough to stop the animation loop. */
+export declare function hasSettled(
+  current: number,
+  target: number,
+  totalFrames: number,
+): boolean;
+
 /** The sequence whose aspect ratio is closest to the viewport, or null. */
 export declare function selectSequence<T extends SequenceShape>(
   viewportWidth: number,
