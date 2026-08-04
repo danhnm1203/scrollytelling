@@ -1,0 +1,42 @@
+name: release
+
+# Publishing is driven by a tag, so the version that ships is always a version
+# that exists in git history. A manual `npm publish` from a laptop is how
+# packages end up shipping uncommitted work.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+
+      - run: npm ci
+
+      # The suite gates the release. A tag should not be able to ship something
+      # that does not pass on a clean checkout.
+      - run: npm test
+
+      - name: Check the tag matches the version in package.json
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          pkg="$(node -p "require('./package.json').version")"
+          if [ "$tag" != "$pkg" ]; then
+            echo "tag v$tag does not match package.json $pkg" >&2
+            exit 1
+          fi
+
+      - run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
