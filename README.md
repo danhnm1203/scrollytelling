@@ -25,6 +25,7 @@ No accounts, no API keys, nothing to install system-wide.
 - [Quickstart with a coding agent](#quickstart-with-a-coding-agent)
 - [Quickstart with the CLI](#quickstart-with-the-cli)
 - [Why it looks right](#why-it-looks-right)
+- [Reduced motion](#reduced-motion)
 - [CLI reference](#cli-reference)
 - [What you get](#what-you-get)
 - [Frames are committed to git](#frames-are-committed-to-git)
@@ -219,6 +220,23 @@ It also builds **two sequences**, landscape and a portrait crop, and the page
 picks whichever suits the screen. A 16:9 frame cannot fill a 9:19.5 phone without
 cropping most of its width, so without this a phone shows a strip surrounded by
 background.
+
+## Reduced motion
+
+Scrubbing a sequence is motion driven by interaction, so a visitor whose system
+asks for less of it does not get a slower version — they get a different page:
+one still, and the story as prose. No worker starts, nothing is decoded, and
+there is no runway to scroll past.
+
+That page costs nothing to produce because it already exists. The generated
+project carries the whole story as an ordinary document for screen readers and
+crawlers, since four beats fading in and out of a canvas read as disconnected
+fragments to anything that cannot see them. Under reduced motion that document
+stops being screen-reader-only and becomes the page itself — the same copy, in
+the same order, that everyone else scrolls through.
+
+The practical consequence: what you write in `components/story.ts` is the page
+twice over. It is worth reading once as flat prose before you ship.
 
 ## CLI reference
 

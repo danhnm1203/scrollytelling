@@ -31,6 +31,9 @@ tests/               node:test, no build step
   minor bump.
 - Every child process uses `execFile`/`spawn` with an **argument array**. Never
   `shell: true`, never string concatenation — user paths reach these commands.
+- The story outline in `app/page.tsx` is load-bearing twice: it is what assistive
+  technology reads, and it is the whole page under `prefers-reduced-motion`. Its
+  `story-outline` class is the hook `globals.css` uses — do not drop it.
 - No error is allowed to be silent.
 
 ## Conventions
