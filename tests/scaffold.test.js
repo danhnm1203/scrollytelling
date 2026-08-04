@@ -112,6 +112,45 @@ describe("scaffold", () => {
     assert.ok(!/^\s*public\/frames/m.test(ignore));
   });
 
+  it("does not exclude the baseline that --diff compares against", async () => {
+    // `.scrollytelling-version` is what makes `scaffold --diff` able to say what
+    // moved in the template. It is a dotfile, so it is exactly the sort of thing
+    // a broad ignore rule sweeps up by accident.
+    const dir = join(tempDir(), "site");
+    await runCapturing([dir]);
+
+    const ignore = readFileSync(join(dir, ".gitignore"), "utf8");
+    assert.ok(!/^\s*\.?\*?scrollytelling-version/m.test(ignore));
+    assert.ok(!/^\s*\.\*\s*$/m.test(ignore), "a bare `.*` rule would hide the baseline");
+  });
+
+  it("ignores what a Next.js project regenerates on every build", async () => {
+    // Without these a `git status` in a generated project is unusable: .next/
+    // alone is thousands of files, and the noise is what makes people stop
+    // reading their own diffs.
+    const dir = join(tempDir(), "site");
+    await runCapturing([dir]);
+
+    const rules = readFileSync(join(dir, ".gitignore"), "utf8")
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => line && !line.startsWith("#"));
+
+    for (const rule of [
+      "node_modules/",
+      ".next/",
+      "out/",
+      "/coverage",
+      ".vercel",
+      "*.tsbuildinfo",
+      "next-env.d.ts",
+      ".env*.local",
+      ".DS_Store",
+    ]) {
+      assert.ok(rules.includes(rule), `expected .gitignore to contain \`${rule}\``);
+    }
+  });
+
   it("leaves an edited file untouched and says which files it skipped", async () => {
     const dir = join(tempDir(), "site");
     await runCapturing([dir]);

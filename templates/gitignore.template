@@ -1,10 +1,45 @@
+# dependencies
 node_modules/
+
+# build output
 .next/
 out/
-next-env.d.ts
-*.tsbuildinfo
-.DS_Store
-.env*.local
+/build
+/coverage
 
-# public/frames/ is deliberately NOT ignored. A deploy builds from a fresh
-# clone, so the encoded frames have to be committed with the project.
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+# deploy
+.vercel
+
+# secrets and keys
+.env*.local
+*.pem
+
+# logs
+*.log
+npm-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# os
+.DS_Store
+
+# --------------------------------------------------------------------------
+# Two things this project has to commit, unlike a normal Next.js app.
+#
+# public/frames/ — the encoded webp sequence. A deploy builds from a fresh
+# clone, so if the frames are not in git there is nothing for the page to
+# draw. They are generated output, which makes ignoring them the instinct.
+# Do not. Re-running `scrollytelling frames` replaces the whole directory,
+# so squash the history before publishing if it gets heavy.
+#
+# .scrollytelling-version — records what the template looked like when this
+# project was generated. `scrollytelling scaffold . --diff` needs it to say
+# what has moved since. Losing it costs you that report.
+#
+# Both are named below so a later broad rule cannot quietly sweep them up.
+!public/frames/
+!.scrollytelling-version

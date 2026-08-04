@@ -5,6 +5,11 @@ node_modules/
 # Scratch output from `frames --preview`
 .preview/
 
+# A generated project kept around to try changes against. It is a whole
+# Next.js install with its own git history and a full frame sequence, so it
+# belongs beside this repo rather than inside it.
+sample/
+
 # NOTE: a generated project commits its own public/frames/ — deploys need the
 # webp sequence in git. Nothing here may ignore it. See README, "Frames in git".
 .gstack/

@@ -290,6 +290,10 @@ It only reports. Adopting a change is your decision — the code is yours once i
 is generated, and a tool that rewrote it on your behalf would make re-running
 this something to be afraid of.
 
+Commit `.scrollytelling-version` along with the rest of the project. It is the
+only record of which template your project came from; without it `--diff` has no
+baseline to compare against and can only tell you to re-scaffold.
+
 ## Frames are committed to git
 
 `public/frames/` is deliberately **not** gitignored: a deploy builds from a fresh
