@@ -1,0 +1,19 @@
+@import "tailwindcss";
+
+:root {
+  /* Replaced at runtime by the frame sequence's own edge color once frames
+     exist, so the canvas has no visible edge against the page. Until then it
+     is just a dark backdrop. */
+  --page-bg: #050505;
+}
+
+html,
+body {
+  background: var(--page-bg);
+  color-scheme: dark;
+}
+
+body {
+  margin: 0;
+  -webkit-font-smoothing: antialiased;
+}
