@@ -33,6 +33,7 @@ import { basename, extname, join } from "node:path";
 
 import { edgeColor, lumaGrid, LUMA_COLS, LUMA_ROWS } from "../lib/measure.mjs";
 import { naturalCompare, decimate, timestampsFor } from "../lib/sequence-plan.mjs";
+import { regionLuma, maxEdgeDelta, REGIONS } from "../lib/report.mjs";
 
 const IMAGE_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".webp", ".tif", ".tiff", ".avif"]);
 const VIDEO_EXTENSIONS = new Set([".mp4", ".mov", ".webm", ".mkv", ".avi", ".m4v"]);
@@ -45,6 +46,12 @@ const ASPECT_TOLERANCE = 0.02;
 
 /** Warn above this; the page waits on every byte before it can scrub. */
 const HEAVY_SEQUENCE_BYTES = 6 * 1024 * 1024;
+
+/** How many columns the luminance table has. Six reads without wrapping. */
+const REPORT_BUCKETS = 6;
+
+/** Above this, interpolating the background between frames is visibly a pulse. */
+const PULSING_BACKGROUND_DELTA = 40;
 
 /**
  * The shape of the portrait sequence.
@@ -507,13 +514,65 @@ function report({ sequences, bytes, warnings }) {
 
   if (bytes > HEAVY_SEQUENCE_BYTES) {
     lines.push(
-      `  This is heavy. Every byte is downloaded before the page can scrub —`,
-      `  consider fewer frames or a smaller --max-width.`,
+      "  This is heavy. Consider fewer frames or a smaller --max-width.",
     );
   }
 
   for (const w of warnings) lines.push(`  note: ${w}`);
 
-  lines.push("", "Next: edit components/story.ts, then run with --check.");
+  // No beat attribution here: beats do not exist yet at this point in the
+  // workflow. This is the raw picture the copy gets written against.
+  for (const sequence of sequences) {
+    lines.push("", ...describeSequence(sequence));
+  }
+
+  lines.push(
+    "",
+    "Write your copy against that, then check it:",
+    "  open-scrolltelling frames --check <project_dir>",
+  );
   process.stdout.write(`${lines.join("\n")}\n`);
+}
+
+/** "left", "left and centre", "left, centre and right". */
+function listOf(items) {
+  if (items.length <= 1) return items.join("");
+  return `${items.slice(0, -1).join(", ")} and ${items.at(-1)}`;
+}
+
+/** The luminance table and background behaviour for one sequence. */
+function describeSequence(sequence) {
+  const table = regionLuma(sequence, REPORT_BUCKETS);
+  const headers = Array.from({ length: REPORT_BUCKETS }, (_, b) =>
+    `${Math.round((b / REPORT_BUCKETS) * 100)}%`.padStart(5),
+  );
+
+  const lines = [
+    `${sequence.id} — how bright the footage is, by region and scroll position`,
+    `        ${headers.join("")}`,
+  ];
+
+  for (const region of REGIONS) {
+    const cells = table[region].map((v) => v.toFixed(2).padStart(5)).join("");
+    lines.push(`  ${region.padEnd(6)}${cells}`);
+  }
+
+  const bright = REGIONS.filter((r) => Math.max(...table[r]) > 0.6);
+  const where =
+    bright.length === REGIONS.length ? "anywhere" : `over ${listOf(bright)}`;
+  lines.push(
+    bright.length
+      ? `  Copy ${where} will need a heavy scrim somewhere in the scroll.`
+      : "  Dark throughout; copy will sit on the footage with almost no scrim.",
+  );
+
+  const { delta, from, to } = maxEdgeDelta(sequence);
+  if (delta > PULSING_BACKGROUND_DELTA) {
+    lines.push(
+      `  Background jumps ${delta}/255 between frames ${from} and ${to} — that will`,
+      "  pulse as the page scrubs. More frames would smooth it out.",
+    );
+  }
+
+  return lines;
 }

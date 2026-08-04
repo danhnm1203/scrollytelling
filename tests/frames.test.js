@@ -383,6 +383,86 @@ describe("frames — portrait sequence", () => {
   });
 });
 
+describe("frames — readability report", () => {
+  it("prints a luminance table per region and scroll position", async () => {
+    const src = await stillsDir(12, { width: 320, height: 180 });
+    const project = join(tempDir(), "site");
+    mkdirSync(join(project, "components"), { recursive: true });
+
+    const { stdout } = await runCapturing([src, project], { frames: 6, "skip-portrait": true });
+
+    assert.match(stdout, /left/);
+    assert.match(stdout, /centre/);
+    assert.match(stdout, /right/);
+    // Values, not just labels — a table of headings would be useless.
+    assert.match(stdout, /0\.\d\d/);
+  });
+
+  it("follows brightness rising across the scroll", async () => {
+    // stillsDir ramps black to white, so the table must rise left to right.
+    const src = await stillsDir(12, { width: 320, height: 180 });
+    const project = join(tempDir(), "site");
+    mkdirSync(join(project, "components"), { recursive: true });
+
+    const { stdout } = await runCapturing([src, project], { frames: 12, "skip-portrait": true });
+
+    const row = /\n\s+centre\s+([\d.\s]+)\n/.exec(stdout);
+    assert.ok(row, `expected a centre row, got:\n${stdout}`);
+    const values = row[1].trim().split(/\s+/).map(Number);
+    assert.ok(values.length >= 4, `expected several buckets, got ${values.length}`);
+    assert.ok(
+      values.at(-1) > values[0],
+      `should brighten across the scroll: ${values.join(" ")}`,
+    );
+  });
+
+  it("warns when the background will pulse", async () => {
+    // Half black, half white: the jump between them is the whole range.
+    const src = tempDir();
+    for (let i = 0; i < 8; i++) {
+      const shade = i < 4 ? 0 : 255;
+      await sharp({
+        create: { width: 160, height: 90, channels: 3, background: { r: shade, g: shade, b: shade } },
+      })
+        .png()
+        .toFile(join(src, `f_${i}.png`));
+    }
+    const project = join(tempDir(), "site");
+    mkdirSync(join(project, "components"), { recursive: true });
+
+    const { stdout } = await runCapturing([src, project], { frames: 8, "skip-portrait": true });
+
+    assert.match(stdout, /pulse/i);
+  });
+
+  it("says so when the footage is dark throughout", async () => {
+    const src = tempDir();
+    for (let i = 0; i < 4; i++) {
+      await sharp({ create: { width: 160, height: 90, channels: 3, background: "#050505" } })
+        .png()
+        .toFile(join(src, `f_${i}.png`));
+    }
+    const project = join(tempDir(), "site");
+    mkdirSync(join(project, "components"), { recursive: true });
+
+    const { stdout } = await runCapturing([src, project], { frames: 4, "skip-portrait": true });
+
+    assert.match(stdout, /dark throughout/i);
+    assert.doesNotMatch(stdout, /pulse/i);
+  });
+
+  it("does not name beats, which do not exist yet at this point", async () => {
+    // The check command does that, after copy has been written.
+    const src = await stillsDir(6, { width: 320, height: 180 });
+    const project = join(tempDir(), "site");
+    mkdirSync(join(project, "components"), { recursive: true });
+
+    const { stdout } = await runCapturing([src, project], { frames: 4, "skip-portrait": true });
+
+    assert.doesNotMatch(stdout, /beat/i);
+  });
+});
+
 describe("frames — preview mode", () => {
   it("extracts a handful of frames without needing a project", async () => {
     const src = await stillsDir(20);
