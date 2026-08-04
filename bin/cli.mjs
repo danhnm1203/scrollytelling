@@ -16,17 +16,18 @@ frames options
   --frames <n>      number of frames in the sequence      (default 50)
   --max-width <px>  longest edge of the encoded webp      (default 1280)
   --quality <n>     webp quality, 1-100                   (default 82)
-  --focus <region>  crop region for the portrait sequence, WxH+X+Y
+  --focus <0-1>     where the portrait crop sits horizontally  (default 0.5)
+  --skip-portrait   build only the landscape sequence
 
 scaffold options
   --force           overwrite existing template files
-  --diff            list template files changed since .scrolltelling-version
+  --diff            report template changes since this project was generated
 
 Other
   -h, --help        show this help
   -v, --version     print the version
 
-Docs: https://github.com/warrennguyen2/open-scrolltelling
+Docs: https://github.com/danhnm1203/open-scrolltelling
 `;
 
 function version() {

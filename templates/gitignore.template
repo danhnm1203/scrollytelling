@@ -1,0 +1,10 @@
+node_modules/
+.next/
+out/
+next-env.d.ts
+*.tsbuildinfo
+.DS_Store
+.env*.local
+
+# public/frames/ is deliberately NOT ignored. A deploy builds from a fresh
+# clone, so the encoded frames have to be committed with the project.

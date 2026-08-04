@@ -39,7 +39,10 @@ test("frames applies documented defaults", () => {
   assert.equal(flags.quality, 82);
   assert.equal(flags.preview, false);
   assert.equal(flags.check, false);
-  assert.equal(flags.focus, undefined);
+  // Centred by default: without a stated subject, the middle is the least
+  // wrong place to aim the portrait crop.
+  assert.equal(flags.focus, 0.5);
+  assert.equal(flags["skip-portrait"], false);
 });
 
 test("numeric flags parse as numbers, in both --flag=value forms", () => {
@@ -70,13 +73,24 @@ test("boolean flags do not consume the following argument", () => {
   assert.deepEqual(parsed.positionals, ["clip.mp4"]);
 });
 
-test("--focus keeps its value as a string", () => {
-  const { flags } = parseArgs(["frames", "clip.mp4", "./site", "--focus", "720x1280+280+0"]);
-  assert.equal(flags.focus, "720x1280+280+0");
+test("--focus parses as a number", () => {
+  // It names where the portrait crop sits horizontally, 0 to 1 — not a pixel
+  // geometry. Asking someone to compute a crop box against source dimensions
+  // they never see is a worse interface than pointing at a position.
+  assert.equal(parseArgs(["frames", "clip.mp4", "./site", "--focus", "0.25"]).flags.focus, 0.25);
+  assert.equal(parseArgs(["frames", "clip.mp4", "./site", "--focus=0.8"]).flags.focus, 0.8);
 });
 
-test("scaffold accepts --force and --diff", () => {
+test("--skip-portrait is accepted", () => {
+  const { flags } = parseArgs(["frames", "clip.mp4", "./site", "--skip-portrait"]);
+  assert.equal(flags["skip-portrait"], true);
+});
+
+test("scaffold accepts --force", () => {
   assert.equal(parseArgs(["scaffold", "./site", "--force"]).flags.force, true);
+});
+
+test("scaffold accepts --diff", () => {
   assert.equal(parseArgs(["scaffold", "./site", "--diff"]).flags.diff, true);
 });
 
