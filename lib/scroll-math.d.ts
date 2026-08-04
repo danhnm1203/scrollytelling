@@ -41,6 +41,46 @@ export declare function computeScale(
   sequence: SequenceShape,
 ): number;
 
+export type BeatShape = {
+  readonly at: number;
+  readonly align: "left" | "center" | "right";
+  readonly anchor?: "middle" | "bottom";
+};
+
+export type VisibleRect = {
+  readonly x0: number;
+  readonly y0: number;
+  readonly x1: number;
+  readonly y1: number;
+};
+
+export type GridSequence = SequenceShape & {
+  readonly lumaGrid: readonly (readonly number[])[];
+};
+
+/** How visible a beat is at this scroll position, 0 to 1. Crossfades. */
+export declare function fadeOpacity(
+  sections: readonly BeatShape[],
+  index: number,
+  progress: number,
+): number;
+
+/** Which part of the source frame is on screen, in 0..1 source coordinates. */
+export declare function visibleRect(
+  viewportWidth: number,
+  viewportHeight: number,
+  sequence: SequenceShape,
+  scale: number,
+): VisibleRect;
+
+/** How dark the backdrop behind a block of copy needs to be, 0 to 0.75. */
+export declare function scrimOpacity(
+  sequence: GridSequence,
+  frame: number,
+  beat: BeatShape,
+  rect: VisibleRect,
+): number;
+
 /** Mixes two border colors; the page paints the result behind the canvas. */
 export declare function lerpColor(from: Rgb, to: Rgb, t: number): [number, number, number];
 

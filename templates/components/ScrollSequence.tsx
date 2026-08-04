@@ -19,13 +19,17 @@
 import { useEffect, useRef, useState } from "react";
 
 import { SEQUENCES, framePath, type Sequence } from "@/components/frames";
+import { story, type Beat } from "@/components/story";
 import {
   computeScale,
+  fadeOpacity,
   frameIndex,
   lerpColor,
+  scrimOpacity,
   scrollHeightVh,
   scrollProgress,
   selectSequence,
+  visibleRect,
 } from "@/lib/scroll-math";
 
 /** Beyond this, more pixels cost more than they show. */
@@ -48,6 +52,9 @@ export function ScrollSequence() {
 
   const [sequence, setSequence] = useState<Sequence | null>(null);
   const [load, setLoad] = useState<LoadState>({ status: "empty" });
+  // Drives the copy overlay. Kept in state rather than read from the canvas so
+  // React owns the text, which keeps it real DOM for screen readers and crawlers.
+  const [progress, setProgress] = useState(0);
 
   // Pick the sequence that suits this viewport, and re-pick if it changes
   // shape. Preserving story position across that switch is a separate concern
@@ -139,9 +146,10 @@ export function ScrollSequence() {
         canvas.height = Math.round(vh * dpr);
       }
 
-      const progress = scrollProgress(scrollY, document.body.scrollHeight, vh);
-      const exact = frameIndex(progress, sequence.totalFrames);
+      const p = scrollProgress(scrollY, document.body.scrollHeight, vh);
+      const exact = frameIndex(p, sequence.totalFrames);
       frameRef.current = exact;
+      setProgress(p);
 
       const lo = Math.floor(exact);
       const hi = Math.min(sequence.totalFrames - 1, Math.ceil(exact));
@@ -191,6 +199,7 @@ export function ScrollSequence() {
   return (
     <div style={{ height: `${scrollHeightVh(sequence.totalFrames)}vh` }}>
       <canvas ref={canvasRef} className="sticky top-0 h-screen w-full" aria-hidden />
+
       {load.status === "loading" && (
         <div className="pointer-events-none fixed inset-0 grid place-items-center">
           <p className="text-sm text-white/50 tabular-nums">
@@ -198,11 +207,96 @@ export function ScrollSequence() {
           </p>
         </div>
       )}
+
+      {load.status === "ready" &&
+        story.sections.map((beat, i) => (
+          <BeatOverlay
+            key={beat.at}
+            beat={beat}
+            opacity={fadeOpacity(story.sections, i, progress)}
+            sequence={sequence}
+            frame={frameRef.current}
+          />
+        ))}
     </div>
   );
 }
 
-function NoFrames({ reason }: { reason: "empty" | "failed" }) {
+/** Where a beat sits, given its alignment and anchor. */
+const PLACEMENT: Record<string, string> = {
+  left: "items-center justify-start text-left",
+  center: "items-center justify-center text-center",
+  right: "items-center justify-end text-right",
+};
+
+/**
+ * One copy beat, with a backdrop sized to how bright the footage behind it is.
+ *
+ * The scrim is the whole point: white text at a fixed opacity stops being
+ * readable the moment a frame brightens under it. Over dark footage this is
+ * almost invisible and the image stays clean.
+ */
+function BeatOverlay({
+  beat,
+  opacity,
+  sequence,
+  frame,
+}: Readonly<{
+  beat: Beat;
+  opacity: number;
+  sequence: Sequence;
+  frame: number;
+}>) {
+  // An inactive beat is hidden outright rather than left at zero opacity.
+  // Zero-opacity elements stay in the accessibility tree, so leaving all four
+  // mounted and visible would have a screen reader read the entire story as one
+  // undifferentiated block.
+  //
+  // The cost is that only the active beat is in the rendered text, so right now
+  // a crawler sees one heading. The fix is not to un-hide these — it is the
+  // separate always-present semantic block that #7 adds, with this animated
+  // layer marked aria-hidden.
+  const hidden = opacity <= 0.001;
+
+  const rect =
+    typeof window === "undefined"
+      ? { x0: 0, y0: 0, x1: 1, y1: 1 }
+      : visibleRect(innerWidth, innerHeight, sequence, computeScale(innerWidth, innerHeight, sequence));
+
+  const scrim = scrimOpacity(sequence, frame, beat, rect);
+  const bottom = beat.anchor === "bottom";
+
+  return (
+    <div
+      className={`pointer-events-none fixed inset-0 flex px-8 ${
+        bottom ? "items-end justify-center pb-24 text-center" : PLACEMENT[beat.align]
+      }`}
+      style={{ opacity, visibility: hidden ? "hidden" : "visible" }}
+    >
+      <div className="relative max-w-xl">
+        {/*
+          A radial gradient rather than a blurred box. A blur spreads the
+          computed opacity over a wide halo, so almost none of it lands behind
+          the glyphs — the scrim measures correctly and then fails to deliver.
+          This holds full strength across the text and falls off past it.
+        */}
+        <div
+          aria-hidden
+          className="absolute -inset-x-12 -inset-y-10"
+          style={{
+            background: `radial-gradient(ellipse at center, rgb(0 0 0 / ${scrim}) 0%, rgb(0 0 0 / ${scrim * 0.85}) 45%, rgb(0 0 0 / 0) 75%)`,
+          }}
+        />
+        <div className="relative space-y-3">
+          <h2 className="text-3xl font-medium text-white/90 sm:text-5xl">{beat.heading}</h2>
+          <p className="text-base text-white/60 sm:text-lg">{beat.body}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function NoFrames({ reason }: Readonly<{ reason: "empty" | "failed" }>) {
   return (
     <main className="grid min-h-screen place-items-center px-6 text-center">
       <div className="space-y-4">
