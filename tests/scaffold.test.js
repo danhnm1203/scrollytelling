@@ -151,6 +151,25 @@ describe("scaffold", () => {
     }
   });
 
+  it("gives a visitor who asked for reduced motion a page that does not scrub", async () => {
+    // Scroll-scrubbing is motion triggered by interaction, so it has to be
+    // possible to turn off. The static outline in page.tsx is what the page
+    // becomes: the same story, already written as prose.
+    const dir = join(tempDir(), "site");
+    await runCapturing([dir]);
+
+    const sequence = readFileSync(join(dir, "components/ScrollSequence.tsx"), "utf8");
+    const css = readFileSync(join(dir, "app/globals.css"), "utf8");
+    const page = readFileSync(join(dir, "app/page.tsx"), "utf8");
+
+    assert.match(sequence, /prefers-reduced-motion: reduce/);
+    assert.match(css, /@media \(prefers-reduced-motion: reduce\)/);
+    // The outline has to be addressable from CSS for the media query to
+    // promote it from screen-reader-only to the page itself.
+    assert.match(page, /story-outline/);
+    assert.match(css, /\.story-outline/);
+  });
+
   it("leaves an edited file untouched and says which files it skipped", async () => {
     const dir = join(tempDir(), "site");
     await runCapturing([dir]);

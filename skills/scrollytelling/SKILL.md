@@ -133,8 +133,11 @@ Constraints that hold while you build it:
 - **Keep `app/page.tsx`'s outline as the only `<h1>`.** Section headings are
   `<h2>`. The canvas is `aria-hidden` decoration; the outline is what a screen
   reader and a crawler actually read.
-- **Honour `prefers-reduced-motion`** in anything you add. The scrub itself is
-  driven by the reader's own scrolling, but reveals and count-ups are not.
+- **Honour `prefers-reduced-motion`** in anything you add. The hero already does
+  — see below — and `globals.css` neutralises transitions and animations
+  page-wide in that mode, so a reveal wrapper inherits the right behaviour. What
+  it cannot do for you is content that moves without a CSS transition: a
+  count-up, a carousel, an autoplaying video. Gate those yourself.
 - Server components by default. Only what listens to scroll is `"use client"`.
 
 Do not give beats explicit fade windows. A beat declares only `at`; the crossfade
@@ -142,6 +145,18 @@ is derived from where its neighbours sit, so the opacities always sum to 1 and n
 scroll position is ever left with no copy on it. The hand-built page mentioned
 above wrote its own four-point windows and shipped a dead zone at ~75% scroll
 that had to be patched. Move `at`, add a beat, delete one — nothing else changes.
+
+## Reduced motion
+
+A visitor with `prefers-reduced-motion: reduce` does not get a slower scrub, they
+get a different page: one still, and the story outline from `app/page.tsx`
+promoted from screen-reader-only to the page itself. `ScrollSequence` starts no
+worker, decodes nothing, adds no scroll listener and renders no runway.
+
+This is deliberate, and it costs the reader nothing — the outline is the same
+copy in the same order, which is the reason to keep it truthful as you edit
+`story.ts`. If you restyle it, keep the `story-outline` class: that is what the
+media query in `globals.css` hangs off.
 
 ## Keeping a generated project current
 
@@ -188,4 +203,15 @@ landscape sequence — the choice flips at a square viewport, not at a phone wid
 3. Screenshot each beat and `Read` it back — judge the contrast yourself.
 4. Rotate mid-scroll: the story position must hold.
 5. `$B console --errors` is clean.
-6. No canvas edge is visible at any scroll position, at either viewport.
+6. No canvas edge is visible at any scroll position, at any of the viewports.
+7. Reduced motion. Browsers do not expose this to a page you can toggle, and
+   `Emulation.setEmulatedMedia` is not on the browse CDP allowlist, so verify it
+   the way the page actually decides:
+   ```
+   $B js "(()=>{for(const s of document.styleSheets){let r;try{r=s.cssRules}catch{continue}
+   for(const x of r){if(x.type===4&&x.conditionText.includes('reduced-motion'))x.media.mediaText='all'}}
+   return getComputedStyle(document.querySelector('.story-outline')).width})()"
+   ```
+   A width of one pixel means the outline is still hidden and the media query is
+   losing to `sr-only`. A real width means it won. Screenshot it and read the
+   result: every beat should be there, in order, as prose.

@@ -19,6 +19,14 @@
  * for assistive technology by the static outline in app/page.tsx. Beats fade in
  * and out as decoration over footage; read linearly they are four disconnected
  * fragments, which is worse than one coherent description.
+ *
+ * That outline is also what makes `prefers-reduced-motion` cheap to honour.
+ * Scrubbing a sequence is motion triggered by interaction, so a visitor who has
+ * asked for less of it should not get it — and because the whole story already
+ * exists as prose, the answer is not a degraded animation but a different page:
+ * one still, and the outline promoted from screen-reader-only to the page
+ * itself (see globals.css). Nothing here runs in that mode — no worker, no
+ * decode, no scroll listener, no 500vh of runway to scroll past.
  */
 
 import { useEffect, useRef, useState } from "react";
@@ -62,6 +70,29 @@ type LoadState =
   | { status: "ready"; failed: number[] }
   | { status: "failed" };
 
+/**
+ * Whether the visitor has asked their system for reduced motion.
+ *
+ * Starts false so the server's HTML and the first client render agree. A
+ * visitor who has asked for it gets the static page a frame later, which is
+ * cheaper than a hydration mismatch on every render for everyone else. It
+ * listens for changes because the setting can be toggled while the page is
+ * open, and a page that only checks once ignores that.
+ */
+function usePrefersReducedMotion() {
+  const [reduced, setReduced] = useState(false);
+
+  useEffect(() => {
+    const query = matchMedia("(prefers-reduced-motion: reduce)");
+    const sync = () => setReduced(query.matches);
+    sync();
+    query.addEventListener("change", sync);
+    return () => query.removeEventListener("change", sync);
+  }, []);
+
+  return reduced;
+}
+
 export function ScrollSequence() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   /** Decoded frames currently held. Every value here is pinned until closed. */
@@ -86,6 +117,7 @@ export function ScrollSequence() {
     total: SEQUENCES[0]?.totalFrames ?? 0,
   });
   const [progress, setProgress] = useState(0);
+  const reducedMotion = usePrefersReducedMotion();
 
   // Pick the sequence that suits this viewport, and hold the visitor's place
   // across any resize.
@@ -122,7 +154,10 @@ export function ScrollSequence() {
   // until it is closed: preloading a whole sequence is a few hundred megabytes,
   // and with two sequences it is enough to have a phone kill the tab.
   useEffect(() => {
-    if (!sequence) return;
+    // Nothing to decode when there is nothing to scrub. This is the expensive
+    // half of the component — a worker, a network request per frame, and up to
+    // 96MB of pinned bitmaps — and reduced motion skips all of it.
+    if (!sequence || reducedMotion) return;
 
     const token = ++tokenRef.current;
     const frames = framesRef.current;
@@ -214,12 +249,12 @@ export function ScrollSequence() {
       worker?.terminate();
       releaseAll(frames);
     };
-  }, [sequence]);
+  }, [sequence, reducedMotion]);
 
   // Draw. One draw per animation frame at most: scrolling fires far more often
   // than the screen refreshes, and drawing per event just queues work.
   useEffect(() => {
-    if (!sequence || load.status !== "ready") return;
+    if (!sequence || reducedMotion || load.status !== "ready") return;
 
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -293,9 +328,10 @@ export function ScrollSequence() {
       rafRef.current = 0;
       scheduleDrawRef.current = null;
     };
-  }, [sequence, load.status]);
+  }, [sequence, reducedMotion, load.status]);
 
   if (!sequence) return <NoFrames reason="empty" />;
+  if (reducedMotion) return <StillHero sequence={sequence} />;
   if (load.status === "failed") return <NoFrames reason="failed" />;
 
   const ready = load.status === "ready";
@@ -341,6 +377,28 @@ export function ScrollSequence() {
         ))}
 
       {ready && <ScrollAffordance progress={progress} />}
+    </div>
+  );
+}
+
+/**
+ * The hero for a visitor who has asked for reduced motion.
+ *
+ * One frame, at its own size, in normal document flow — so the page is as long
+ * as its content instead of the several screens of runway the scrub needs. The
+ * copy is not repeated over it: the outline in app/page.tsx is visible in this
+ * mode and already says all of it, in order, as prose.
+ *
+ * Frame 0 rather than a frame chosen from the middle. It is the same still the
+ * page paints before the sequence decodes and the same one a link preview
+ * shows, so a reader sees one representative image of this page wherever they
+ * meet it.
+ */
+function StillHero({ sequence }: Readonly<{ sequence: Sequence }>) {
+  return (
+    <div aria-hidden>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={framePath(sequence.id, 0)} alt="" className="block h-auto w-full" />
     </div>
   );
 }
