@@ -462,7 +462,7 @@ function NoFrames({ reason }: Readonly<{ reason: "empty" | "failed" }>) {
             : "Generate a sequence to make this page scroll:"}
         </p>
         <code className="inline-block rounded bg-white/5 px-3 py-2 text-sm text-white/70">
-          open-scrolltelling frames &lt;video&gt; .
+          open-scrollytelling frames &lt;video&gt; .
         </code>
       </div>
     </main>
@@ -498,6 +498,6 @@ function warnFailed(failed: Set<number>) {
   // thirty-second fix instead of a hunt through the wrong file.
   console.warn(
     `[scrollytelling] ${failed.size} frame(s) failed to load: ${[...failed].join(", ")}.\n` +
-      "Re-run: open-scrolltelling frames <video> .",
+      "Re-run: open-scrollytelling frames <video> .",
   );
 }

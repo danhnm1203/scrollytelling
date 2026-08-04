@@ -1,9 +1,9 @@
-# Spec: open-scrolltelling — Phase A (video → scrollytelling landing page)
+# Spec: open-scrollytelling — Phase A (video → scrollytelling landing page)
 
 Status: awaiting publication to the issue tracker (`ready-for-agent`)
-Derived from: [design](../superpowers/specs/2026-08-04-open-scrolltelling-design.md) ·
-[CEO review](../reviews/2026-08-04-ceo-review-open-scrolltelling.md) ·
-[eng review](../reviews/2026-08-04-eng-review-open-scrolltelling.md)
+Derived from: [design](../superpowers/specs/2026-08-04-open-scrollytelling-design.md) ·
+[CEO review](../reviews/2026-08-04-ceo-review-open-scrollytelling.md) ·
+[eng review](../reviews/2026-08-04-eng-review-open-scrollytelling.md)
 
 ---
 

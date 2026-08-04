@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 #
-# Installs this skill so an agent can invoke it as /open-scrolltelling.
+# Installs this skill so an agent can invoke it as /open-scrollytelling.
 #
 # The fallback path. Prefer the plugin marketplace or the skills CLI:
 #
-#   /plugin marketplace add danhnm1203/open-scrolltelling
-#   npx skills add danhnm1203/open-scrolltelling
+#   /plugin marketplace add danhnm1203/open-scrollytelling
+#   npx skills add danhnm1203/open-scrollytelling
 #
 # This exists for agents those do not cover, and it gets one detail right that
 # is easy to miss by hand: the slash command resolves against the directory
@@ -17,7 +17,7 @@
 
 set -euo pipefail
 
-SKILL_NAME="open-scrolltelling"
+SKILL_NAME="open-scrollytelling"
 SOURCE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SOURCE_FILE="$SOURCE_DIR/skills/$SKILL_NAME/SKILL.md"
 TARGET_DIR="${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}/$SKILL_NAME"
@@ -45,12 +45,12 @@ fi
 echo "Skill $how to $TARGET_DIR/SKILL.md"
 echo
 
-if command -v open-scrolltelling >/dev/null 2>&1; then
-  echo "CLI: $(open-scrolltelling --version) — ready."
+if command -v open-scrollytelling >/dev/null 2>&1; then
+  echo "CLI: $(open-scrollytelling --version) — ready."
 else
   echo "The CLI is not on PATH yet. The skill needs it:"
-  echo "  npm i -g github:danhnm1203/open-scrolltelling"
-  echo "or run it per-invocation with npx github:danhnm1203/open-scrolltelling"
+  echo "  npm i -g github:danhnm1203/open-scrollytelling"
+  echo "or run it per-invocation with npx github:danhnm1203/open-scrollytelling"
 fi
 
 echo

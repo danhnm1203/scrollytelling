@@ -1,10 +1,10 @@
-# open-scrolltelling
+# open-scrollytelling
 
 An npm CLI + skill that turns a video into a scroll-scrubbed Next.js landing page.
 
-- **Design (source of truth):** [docs/superpowers/specs/2026-08-04-open-scrolltelling-design.md](docs/superpowers/specs/2026-08-04-open-scrolltelling-design.md)
-- **Task order:** the [CEO review](docs/reviews/2026-08-04-ceo-review-open-scrolltelling.md) (T1–T23)
-  and [Eng review](docs/reviews/2026-08-04-eng-review-open-scrolltelling.md) (E1–E17)
+- **Design (source of truth):** [docs/superpowers/specs/2026-08-04-open-scrollytelling-design.md](docs/superpowers/specs/2026-08-04-open-scrollytelling-design.md)
+- **Task order:** the [CEO review](docs/reviews/2026-08-04-ceo-review-open-scrollytelling.md) (T1–T23)
+  and [Eng review](docs/reviews/2026-08-04-eng-review-open-scrollytelling.md) (E1–E17)
 - **Deliberately deferred:** [TODOS.md](TODOS.md)
 
 ## Layout

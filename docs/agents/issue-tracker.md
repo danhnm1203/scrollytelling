@@ -1,6 +1,6 @@
 # Issue tracker
 
-Issues for this repo live in **GitHub Issues** on `danhnm1203/open-scrolltelling`,
+Issues for this repo live in **GitHub Issues** on `danhnm1203/open-scrollytelling`,
 managed with the `gh` CLI.
 
 Skills that read from or write to the tracker (`to-tickets`, `to-spec`, `triage`, `qa`)

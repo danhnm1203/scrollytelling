@@ -1,12 +1,12 @@
 {
-  "name": "open-scrolltelling",
+  "name": "open-scrollytelling",
   "description": "Turn a video into a scroll-scrubbed Next.js landing page. The clip advances frame by frame as the visitor scrolls, with copy beats fading in over it. Measures every frame while encoding it, so the page background matches each frame's own border color and each block of copy gets a backdrop sized to the luminance actually behind it. Builds a portrait crop alongside the landscape one, so a phone gets a composition framed for a phone.",
   "version": "0.1.0",
   "author": {
     "name": "danhnm1203"
   },
-  "homepage": "https://github.com/danhnm1203/open-scrolltelling",
-  "repository": "https://github.com/danhnm1203/open-scrolltelling",
+  "homepage": "https://github.com/danhnm1203/open-scrollytelling",
+  "repository": "https://github.com/danhnm1203/open-scrollytelling",
   "license": "MIT",
   "keywords": [
     "scrollytelling",

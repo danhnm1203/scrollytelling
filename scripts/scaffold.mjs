@@ -39,7 +39,7 @@ const TEMPLATES = fileURLToPath(new URL("../templates/", import.meta.url));
  * every frames run, so keeping the baseline there would give it two writers and
  * make --diff compare against a baseline that silently reset itself.
  */
-const VERSION_FILE = ".scrolltelling-version";
+const VERSION_FILE = ".scrollytelling-version";
 
 /**
  * Template files whose name differs from their name in the project.
@@ -151,12 +151,12 @@ export async function run(positionals, flags = {}) {
     return scaffold(positionals, flags);
   } catch (err) {
     if (err instanceof ScaffoldError) {
-      process.stderr.write(`open-scrolltelling: ${err.message}\n`);
+      process.stderr.write(`open-scrollytelling: ${err.message}\n`);
       return 1;
     }
     // Anything else is still ours to explain. A permission error should read as
     // a sentence, not as a stack trace the user has to decode.
-    process.stderr.write(`open-scrolltelling: could not scaffold — ${err.message}\n`);
+    process.stderr.write(`open-scrollytelling: could not scaffold — ${err.message}\n`);
     return 1;
   }
 }
@@ -303,7 +303,7 @@ function report({ projectDir, written, skipped, overwrote, forced }) {
       "Next:",
       `  cd ${projectDir}`,
       "  npm install",
-      "  open-scrolltelling frames <video> .",
+      "  open-scrollytelling frames <video> .",
     );
   }
 

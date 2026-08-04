@@ -1,16 +1,16 @@
 ---
-name: open-scrolltelling
+name: open-scrollytelling
 description: Turn a video (or an ordered image folder) into a scroll-scrubbed Next.js landing page — the clip advances frame by frame as the visitor scrolls, with copy beats fading in over it. Use for a scrollytelling hero, a scroll-linked product reveal, an "Apple-style" scroll animation, a scroll-linked image sequence, or to turn footage into a landing page.
 argument-hint: "[video-or-image-dir] [project-dir]"
 license: MIT
 metadata:
   version: "0.1.0"
-  repository: "https://github.com/danhnm1203/open-scrolltelling"
+  repository: "https://github.com/danhnm1203/open-scrollytelling"
 ---
 
-# open-scrolltelling
+# open-scrollytelling
 
-Everything runs through the `open-scrolltelling` CLI.
+Everything runs through the `open-scrollytelling` CLI.
 
 ## Installing on a new machine
 
@@ -21,7 +21,7 @@ Two things to install: the CLI, and this skill file.
 Run it without installing anything:
 
 ```bash
-npx github:danhnm1203/open-scrolltelling <command>
+npx github:danhnm1203/open-scrollytelling <command>
 ```
 
 The first run fetches and builds the dependencies, which takes a minute or two
@@ -31,8 +31,8 @@ starts in a couple of seconds. Good for trying it, or for a machine you touch on
 Install it if you are going to use it repeatedly:
 
 ```bash
-npm i -g github:danhnm1203/open-scrolltelling
-open-scrolltelling --version
+npm i -g github:danhnm1203/open-scrollytelling
+open-scrollytelling --version
 ```
 
 Once the package is published, drop the `github:` prefix from either form.
@@ -45,22 +45,22 @@ binaries, so nothing needs installing system-wide.
 Claude Code, as a plugin:
 
 ```
-/plugin marketplace add danhnm1203/open-scrolltelling
-/plugin install open-scrolltelling@open-scrolltelling
+/plugin marketplace add danhnm1203/open-scrollytelling
+/plugin install open-scrollytelling@open-scrollytelling
 ```
 
 Codex and other agents, via the skills CLI:
 
 ```bash
-npx skills add danhnm1203/open-scrolltelling
-npx skills add danhnm1203/open-scrolltelling -a codex
+npx skills add danhnm1203/open-scrollytelling
+npx skills add danhnm1203/open-scrollytelling -a codex
 ```
 
 Or by hand:
 
 ```bash
-git clone https://github.com/danhnm1203/open-scrolltelling.git
-cp -R open-scrolltelling/skills/open-scrolltelling ~/.claude/skills/
+git clone https://github.com/danhnm1203/open-scrollytelling.git
+cp -R open-scrollytelling/skills/open-scrollytelling ~/.claude/skills/
 ```
 
 `./install-skill.sh` in the clone does the same thing and checks the one detail
@@ -68,21 +68,21 @@ that is easy to get wrong: the slash command resolves against the *directory*
 name, which must match the `name:` in this file. A mismatch fails silently — the
 skill simply never appears.
 
-Start a new session and it is available as **`/open-scrolltelling`**.
+Start a new session and it is available as **`/open-scrollytelling`**.
 
 ## Workflow
 
-1. `open-scrolltelling frames --preview <video>` — 5 frames into a temp dir.
+1. `open-scrollytelling frames --preview <video>` — 5 frames into a temp dir.
 2. **Read those frames** and propose copy beats from what is actually on screen.
    Place beats against the footage, not on round numbers — `0.30 / 0.60 / 0.90` are
    placeholders.
-3. `open-scrolltelling scaffold <project_dir>`
+3. `open-scrollytelling scaffold <project_dir>`
 4. `cd <project_dir> && npm install` — only next/react/react-dom, so it is fast.
-5. `open-scrolltelling frames <video> <project_dir> --frames 50 [--focus 0.5]`
+5. `open-scrollytelling frames <video> <project_dir> --frames 50 [--focus 0.5]`
    — read the luminance table it prints. `--focus` is where the portrait crop sits
    horizontally, 0 to 1; the subject is not always centred.
 6. Edit `components/story.ts`.
-7. `open-scrolltelling frames --check <project_dir>` — per-beat readability warnings.
+7. `open-scrollytelling frames --check <project_dir>` — per-beat readability warnings.
 8. `npm run build && npm run start -- -p 3737`
 9. **Measurement checkpoint** (below).
 10. Verify, then report.
@@ -93,7 +93,7 @@ extra weight.
 
 ## Keeping a generated project current
 
-`open-scrolltelling scaffold <project_dir> --diff` reports what has changed in the
+`open-scrollytelling scaffold <project_dir> --diff` reports what has changed in the
 template since that project was generated, split into changes safe to take and
 changes that would collide with edits made since. It only reports; adopting a
 change is the project owner's call.

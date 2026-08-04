@@ -1,7 +1,7 @@
-# open-scrolltelling — Design (Phase A)
+# open-scrollytelling — Design (Phase A)
 
-2026-08-04 · Revision 3, after the [CEO review](../../reviews/2026-08-04-ceo-review-open-scrolltelling.md)
-and the [eng review](../../reviews/2026-08-04-eng-review-open-scrolltelling.md)
+2026-08-04 · Revision 3, after the [CEO review](../../reviews/2026-08-04-ceo-review-open-scrollytelling.md)
+and the [eng review](../../reviews/2026-08-04-eng-review-open-scrollytelling.md)
 
 The implementation task list lives in those two review documents. This file is the source of
 truth for the *design*; the reviews are the source of truth for the *order of work*.
@@ -68,17 +68,17 @@ The heavy tooling lives in the **skill repo**. The generated project carries onl
 site needs to build.
 
 ```
-  SKILL REPO (open-scrolltelling)          GENERATED PROJECT
+  SKILL REPO (open-scrollytelling)          GENERATED PROJECT
   ─────────────────────────────            ─────────────────
   SKILL.md · LICENSE · README.md           app/{page,layout}.tsx
   .github/workflows/{test,release}.yml     app/globals.css
   package.json                             components/ScrollSequence.tsx
     deps: sharp, ffmpeg-static (PINNED)    components/story.ts      ◀── the editing surface
-    bin:  open-scrolltelling  (npm CLI)    components/frames.ts     ◀── GENERATED, do not edit
+    bin:  open-scrollytelling  (npm CLI)    components/frames.ts     ◀── GENERATED, do not edit
                                            components/decoder.worker.js
   scripts/scaffold.mjs ──── copies ───────▶ lib/scroll-math.mjs (+ .d.ts)
     (node:fs only)                         public/frames/…          (COMMITTED to git)
-    --diff → compares .scrolltelling-version .scrolltelling-version ◀── scaffold writes, SOLE writer
+    --diff → compares .scrollytelling-version .scrollytelling-version ◀── scaffold writes, SOLE writer
                                            ▲
   scripts/frames.mjs ────── writes ────────┘  deps: next 16 · react 19 · tailwind
     (sharp + ffmpeg-static — HERE)              NO framer-motion, NO sharp/ffmpeg
@@ -98,7 +98,7 @@ site needs to build.
 
 | Module | Does | Depends on | Who edits |
 | --- | --- | --- | --- |
-| `scripts/scaffold.mjs` | copies the template; `--force`; `--diff`; writes `.scrolltelling-version` | `node:fs` only | nobody |
+| `scripts/scaffold.mjs` | copies the template; `--force`; `--diff`; writes `.scrollytelling-version` | `node:fs` only | nobody |
 | `scripts/frames.mjs` | extracts, measures, encodes, reports; `--preview`; `--check` | sharp, ffmpeg-static | nobody |
 | `lib/scroll-math.mjs` | **all the math that decides how the page looks**, pure functions | nothing | rarely; well tested |
 | `components/frames.ts` | **the data contract** between build time and runtime | — | generated; never by hand |
@@ -123,14 +123,14 @@ real page runs — the copy is a fork.
 
 ### Distribution
 
-The skill publishes as an **npm CLI**: `npx open-scrolltelling <video> <project_dir>`. It works
+The skill publishes as an **npm CLI**: `npx open-scrollytelling <video> <project_dir>`. It works
 without Claude, and npm handles versioning and updates. `SKILL.md` calls that same CLI.
 `.github/workflows/release.yml` publishes on tag. Without this step the only way to install is
 copying files into `~/.claude/skills` by hand, with no update path.
 
 ### Upgrading a generated project
 
-`scaffold.mjs` writes `TEMPLATE_VERSION` into **`.scrolltelling-version`** — a non-generated
+`scaffold.mjs` writes `TEMPLATE_VERSION` into **`.scrollytelling-version`** — a non-generated
 file that `frames.mjs` never touches. `scaffold.mjs --diff <project>` lists the template files
 that changed since that version. It **never overwrites automatically.**
 
@@ -141,9 +141,9 @@ against the wrong baseline.
 ## `frames.mjs`
 
 ```
-open-scrolltelling frames <video|directory> <project_dir> [--frames 50] [--max-width 1280] [--quality 82]
-open-scrolltelling frames --preview <video>          # 5 frames to a temp dir, no project needed
-open-scrolltelling frames --check <project_dir>      # reads story.ts, warns per beat
+open-scrollytelling frames <video|directory> <project_dir> [--frames 50] [--max-width 1280] [--quality 82]
+open-scrollytelling frames --preview <video>          # 5 frames to a temp dir, no project needed
+open-scrollytelling frames --check <project_dir>      # reads story.ts, warns per beat
 ```
 
 `--preview` exists because the workflow needs to look at frames in order to propose copy
@@ -442,15 +442,15 @@ block solves both.
 ## Workflow
 
 ```
-0. npm i -g open-scrolltelling      (or npx; frames self-checks its dependencies)
-1. open-scrolltelling frames --preview <video>     → 5 frames to a temp dir
+0. npm i -g open-scrollytelling      (or npx; frames self-checks its dependencies)
+1. open-scrollytelling frames --preview <video>     → 5 frames to a temp dir
 2. Read those frames, propose beats from what the footage is actually doing
-3. open-scrolltelling scaffold <project_dir>
+3. open-scrollytelling scaffold <project_dir>
 4. cd <project_dir> && npm install                 (next/react/tailwind only — fast)
-5. open-scrolltelling frames <video> <project_dir> --frames 50 --focus <portrait region>
+5. open-scrollytelling frames <video> <project_dir> --frames 50 --focus <portrait region>
    → read the raw luminance table
 6. Edit components/story.ts
-7. open-scrolltelling frames --check <project_dir> → per-beat warnings
+7. open-scrollytelling frames --check <project_dir> → per-beat warnings
 8. npm run build && npm run start -- -p 3737
 9. ◀── MEASUREMENT CHECKPOINT (below)
 10. Full verification, then report
@@ -515,7 +515,7 @@ values.
 | `fadeOpacity` | adding or removing a beat leaves no gap |
 | `lerpColor` · `scrollHeightVh` | boundaries and midpoints |
 | `--check` | no `story.ts` → clear error; with one → correct per-beat warnings |
-| `.scrolltelling-version` | re-running `frames.mjs` does not change the version |
+| `.scrollytelling-version` | re-running `frames.mjs` does not change the version |
 | security | a filename containing `;` `$(` `&&` is handled normally |
 | golden master | `testsrc` clip → whole pipeline → file count, `totalFrames`, measured values within tolerance |
 
@@ -554,7 +554,7 @@ rotate mid-scroll; fast scroll before loading finishes; JavaScript disabled; scr
 | Rotate | preserve progress across the switch | different frame counts → different height → the visitor is silently moved |
 | Lenis | keep, but prove it at the checkpoint | known `position: sticky` interactions, commonly disabled on iOS |
 | `scroll-math` | plain `.mjs` + `.d.ts` + parity test | `node:test` must import it; the copy must not become a fork |
-| Template version | `.scrolltelling-version`, not generated | inside `frames.ts` there would be two writers and `--diff` would compare wrongly |
+| Template version | `.scrollytelling-version`, not generated | inside `frames.ts` there would be two writers and `--diff` would compare wrongly |
 | Readability report | two modes: raw table, then `--check` | it cannot name beats that do not exist yet |
 | Accessibility | static block + `aria-hidden` animated layer | `opacity: 0` elements stay in the accessibility tree |
 | `public/frames/` | committed to git | gitignored means a fresh clone cannot build |
