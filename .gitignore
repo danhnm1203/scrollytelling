@@ -7,3 +7,4 @@ node_modules/
 
 # NOTE: a generated project commits its own public/frames/ — deploys need the
 # webp sequence in git. Nothing here may ignore it. See README, "Frames in git".
+.gstack/
