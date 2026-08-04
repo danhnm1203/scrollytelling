@@ -10,7 +10,15 @@
  */
 
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from "node:fs";
+import {
+  mkdtempSync,
+  mkdirSync,
+  writeFileSync,
+  readFileSync,
+  readdirSync,
+  existsSync,
+  rmSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
@@ -380,6 +388,145 @@ describe("frames — portrait sequence", () => {
 
     const seqs = contractValue(readContract(dest), "SEQUENCES");
     assert.equal(seqs.length, 1, "a tall source needs no second sequence");
+  });
+});
+
+describe("frames — corrupt frames", () => {
+  /** A file that looks like an image and is not one. */
+  function writeCorrupt(dir, name) {
+    writeFileSync(join(dir, name), Buffer.from("not an image, just bytes", "utf8"));
+  }
+
+  /** `count` good stills, plus corrupt files at the given positions. */
+  async function mixedDir(count, corruptAt) {
+    const dir = tempDir();
+    for (let i = 0; i < count; i++) {
+      const name = `f_${String(i).padStart(3, "0")}.png`;
+      if (corruptAt.includes(i)) {
+        writeCorrupt(dir, name);
+        continue;
+      }
+      const v = Math.round((i / Math.max(1, count - 1)) * 255);
+      await sharp({
+        create: { width: 160, height: 90, channels: 3, background: { r: v, g: v, b: v } },
+      })
+        .png()
+        .toFile(join(dir, name));
+    }
+    return dir;
+  }
+
+  it("skips one bad frame and completes the run", async () => {
+    const src = await mixedDir(20, [7]);
+    const project = join(tempDir(), "site");
+    mkdirSync(join(project, "components"), { recursive: true });
+
+    const { code } = await runCapturing([src, project], { frames: 20, "skip-portrait": true });
+
+    assert.equal(code, 0, "one bad file should not cost the whole run");
+  });
+
+  it("names the file it skipped", async () => {
+    const src = await mixedDir(20, [7]);
+    const project = join(tempDir(), "site");
+    mkdirSync(join(project, "components"), { recursive: true });
+
+    const { stdout, stderr } = await runCapturing([src, project], {
+      frames: 20,
+      "skip-portrait": true,
+    });
+
+    assert.match(`${stdout}${stderr}`, /f_007\.png/);
+  });
+
+  it("keeps the contract consistent with the frames actually written", async () => {
+    // The page indexes frames by position. A gap would 404 at runtime and show
+    // as the animation sticking, which reads as a scrub bug rather than a
+    // missing file.
+    const src = await mixedDir(20, [3, 11]);
+    const project = join(tempDir(), "site");
+    mkdirSync(join(project, "components"), { recursive: true });
+
+    await runCapturing([src, project], { frames: 20, "skip-portrait": true });
+
+    const [seq] = contractValue(readContract(project), "SEQUENCES");
+    const written = readdirSync(join(project, "public/frames")).filter((f) => f.endsWith(".webp"));
+
+    assert.equal(seq.totalFrames, written.length);
+    assert.equal(seq.edgeColors.length, seq.totalFrames);
+    assert.equal(seq.lumaGrid.length, seq.totalFrames);
+
+    // Numbered contiguously from zero, with no gaps.
+    for (let i = 0; i < seq.totalFrames; i++) {
+      assert.ok(
+        existsSync(join(project, `public/frames/landscape_${i}.webp`)),
+        `frame ${i} is missing — the sequence has a hole in it`,
+      );
+    }
+  });
+
+  it("keeps both sequences the same length when one source is bad", async () => {
+    const src = await mixedDir(20, [5]);
+    const project = join(tempDir(), "site");
+    mkdirSync(join(project, "components"), { recursive: true });
+
+    await runCapturing([src, project], { frames: 20 });
+
+    const sequences = contractValue(readContract(project), "SEQUENCES");
+    const counts = new Set(sequences.map((s) => s.totalFrames));
+    assert.equal(counts.size, 1, `sequences disagree on length: ${[...counts]}`);
+  });
+
+  it("aborts when a large fraction of frames are unreadable", async () => {
+    // At this point the input itself is wrong, and quietly producing a much
+    // shorter animation would hide that.
+    const src = await mixedDir(20, [1, 3, 5, 7, 9, 11, 13]);
+    const project = join(tempDir(), "site");
+    mkdirSync(join(project, "components"), { recursive: true });
+
+    const { code, stderr } = await runCapturing([src, project], {
+      frames: 20,
+      "skip-portrait": true,
+    });
+
+    assert.notEqual(code, 0);
+    assert.match(stderr, /unreadable|corrupt|could not/i);
+  });
+
+  it("says how many failed when it aborts", async () => {
+    const src = await mixedDir(20, [1, 3, 5, 7, 9, 11, 13]);
+    const project = join(tempDir(), "site");
+    mkdirSync(join(project, "components"), { recursive: true });
+
+    const { stderr } = await runCapturing([src, project], { frames: 20, "skip-portrait": true });
+    assert.match(stderr, /7/);
+  });
+
+  it("leaves a previous sequence intact when it aborts", async () => {
+    const project = join(tempDir(), "site");
+    mkdirSync(join(project, "components"), { recursive: true });
+
+    const good = await stillsDir(8, { width: 160, height: 90 });
+    await runCapturing([good, project], { frames: 8, "skip-portrait": true });
+    const before = readContract(project);
+
+    const bad = await mixedDir(20, [1, 3, 5, 7, 9, 11, 13]);
+    const { code } = await runCapturing([bad, project], { frames: 20, "skip-portrait": true });
+
+    assert.notEqual(code, 0);
+    assert.equal(readContract(project), before, "the working sequence must survive");
+  });
+
+  it("fails clearly when every frame is unreadable", async () => {
+    const src = await mixedDir(6, [0, 1, 2, 3, 4, 5]);
+    const project = join(tempDir(), "site");
+    mkdirSync(join(project, "components"), { recursive: true });
+
+    const { code, stderr } = await runCapturing([src, project], { frames: 6 });
+
+    assert.notEqual(code, 0);
+    assert.ok(stderr.length > 0);
+    assert.ok(!/^\s*at /m.test(stderr), "must not surface as a stack trace");
   });
 });
 
