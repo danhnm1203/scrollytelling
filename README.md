@@ -5,21 +5,37 @@ frame as the visitor scrolls, with copy fading in over it.
 
 No accounts, no API keys, nothing to install system-wide.
 
+## Install
+
+Not on npm yet, so both forms point at GitHub. Drop the `github:` prefix once it
+is published.
+
+```bash
+# Run it without installing — first run takes a minute, then it is cached
+npx github:danhnm1203/open-scrolltelling <command>
+
+# Or install it, if you will use it more than once
+npm i -g github:danhnm1203/open-scrolltelling
+```
+
+Node 20 or newer. Nothing else to install: `sharp` and `ffmpeg-static` come with
+it and bring their own binaries.
+
 ## Quickstart
 
 ```bash
 # 1. Look at the footage before deciding what the page says
-npx open-scrolltelling frames --preview ./clip.mp4
+open-scrolltelling frames --preview ./clip.mp4
 
 # 2. Create the project
-npx open-scrolltelling scaffold ./my-site
+open-scrolltelling scaffold ./my-site
 cd my-site && npm install
 
 # 3. Turn the clip into a measured frame sequence
-npx open-scrolltelling frames ../clip.mp4 . --frames 50
+open-scrolltelling frames ../clip.mp4 . --frames 50
 
 # 4. Write your beats in components/story.ts, then check them
-npx open-scrolltelling frames --check .
+open-scrolltelling frames --check .
 
 # 5. Run it
 npm run dev

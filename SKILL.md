@@ -11,17 +11,29 @@ Everything runs through the `open-scrolltelling` CLI.
 
 Two things to install: the CLI, and this skill file.
 
-**The CLI.** Not on npm yet, so install from GitHub:
+**The CLI.** Not on npm yet, so both forms point at GitHub.
+
+Run it without installing anything:
+
+```bash
+npx github:danhnm1203/open-scrolltelling <command>
+```
+
+The first run fetches and builds the dependencies, which takes a minute or two
+because `ffmpeg-static` downloads a binary. Every run after that is cached and
+starts in a couple of seconds. Good for trying it, or for a machine you touch once.
+
+Install it if you are going to use it repeatedly:
 
 ```bash
 npm i -g github:danhnm1203/open-scrolltelling
+open-scrolltelling --version
 ```
 
-Once it is published, `npm i -g open-scrolltelling` will work instead. Either way
-`sharp` and `ffmpeg-static` come with it and bring their own binaries, so nothing
-needs installing system-wide. Node 20 or newer.
+Once the package is published, drop the `github:` prefix from either form.
 
-Verify with `open-scrolltelling --version`.
+Node 20 or newer. `sharp` and `ffmpeg-static` come with it and bring their own
+binaries, so nothing needs installing system-wide.
 
 **The skill.** Put this file where the agent looks for skills:
 
