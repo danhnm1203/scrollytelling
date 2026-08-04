@@ -14,6 +14,11 @@
  * color, interpolated between frames, is what stops the canvas showing as a
  * rectangle against the page — the defect a single hardcoded color guarantees
  * on any footage with a gradient or changing exposure.
+ *
+ * Accessibility note: everything in here is aria-hidden. The story is carried
+ * for assistive technology by the static outline in app/page.tsx. Beats fade in
+ * and out as decoration over footage; read linearly they are four disconnected
+ * fragments, which is worse than one coherent description.
  */
 
 import { useEffect, useRef, useState } from "react";
@@ -38,8 +43,10 @@ const MAX_DPR = 2;
 /** Subjects usually sit a little above centre. */
 const VERTICAL_ANCHOR = 0.45;
 
+/** Once someone has scrolled this far, they know the page scrolls. */
+const HINT_FADES_AT = 0.02;
+
 type LoadState =
-  | { status: "empty" }
   | { status: "loading"; done: number; total: number }
   | { status: "ready"; failed: number[] }
   | { status: "failed" };
@@ -50,15 +57,19 @@ export function ScrollSequence() {
   const frameRef = useRef(0);
   const rafRef = useRef(0);
 
-  const [sequence, setSequence] = useState<Sequence | null>(null);
-  const [load, setLoad] = useState<LoadState>({ status: "empty" });
-  // Drives the copy overlay. Kept in state rather than read from the canvas so
-  // React owns the text, which keeps it real DOM for screen readers and crawlers.
+  // Seeded with the first sequence rather than null so the server renders the
+  // real page. Starting empty meant the pre-JavaScript HTML said "no frames
+  // yet" even when frames existed, which is what a crawler and a visitor with
+  // scripting disabled would see.
+  const [sequence, setSequence] = useState<Sequence | null>(SEQUENCES[0] ?? null);
+  const [load, setLoad] = useState<LoadState>({
+    status: "loading",
+    done: 0,
+    total: SEQUENCES[0]?.totalFrames ?? 0,
+  });
   const [progress, setProgress] = useState(0);
 
-  // Pick the sequence that suits this viewport, and re-pick if it changes
-  // shape. Preserving story position across that switch is a separate concern
-  // and is not handled here yet.
+  // Re-pick once the real viewport is known, and again if it changes shape.
   useEffect(() => {
     const pick = () => setSequence(selectSequence(innerWidth, innerHeight, SEQUENCES));
     pick();
@@ -69,10 +80,7 @@ export function ScrollSequence() {
   // Load the sequence. A frame that 404s is counted and named rather than
   // silently leaving a hole nobody can explain later.
   useEffect(() => {
-    if (!sequence) {
-      setLoad({ status: "empty" });
-      return;
-    }
+    if (!sequence) return;
 
     let cancelled = false;
     const images: (HTMLImageElement | null)[] = new Array(sequence.totalFrames).fill(null);
@@ -196,19 +204,38 @@ export function ScrollSequence() {
   if (!sequence) return <NoFrames reason="empty" />;
   if (load.status === "failed") return <NoFrames reason="failed" />;
 
-  return (
-    <div style={{ height: `${scrollHeightVh(sequence.totalFrames)}vh` }}>
-      <canvas ref={canvasRef} className="sticky top-0 h-screen w-full" aria-hidden />
+  const ready = load.status === "ready";
 
-      {load.status === "loading" && (
+  return (
+    <div aria-hidden style={{ height: `${scrollHeightVh(sequence.totalFrames)}vh` }}>
+      <div className="sticky top-0 h-screen w-full">
+        {/*
+          The opening frame as a plain image. It is what the page paints first,
+          what a link preview shows, and what a visitor with scripting disabled
+          gets. The canvas covers it once the sequence is decoded.
+        */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={framePath(sequence.id, 0)}
+          alt=""
+          className="absolute inset-0 h-full w-full object-cover"
+        />
+        <canvas
+          ref={canvasRef}
+          className="absolute inset-0 h-full w-full"
+          style={{ opacity: ready ? 1 : 0 }}
+        />
+      </div>
+
+      {!ready && (
         <div className="pointer-events-none fixed inset-0 grid place-items-center">
-          <p className="text-sm text-white/50 tabular-nums">
-            {Math.round((load.done / load.total) * 100)}%
+          <p className="rounded bg-black/40 px-3 py-1 text-sm text-white/70 tabular-nums">
+            {load.total ? Math.round((load.done / load.total) * 100) : 0}%
           </p>
         </div>
       )}
 
-      {load.status === "ready" &&
+      {ready &&
         story.sections.map((beat, i) => (
           <BeatOverlay
             key={beat.at}
@@ -218,7 +245,44 @@ export function ScrollSequence() {
             frame={frameRef.current}
           />
         ))}
+
+      {ready && <ScrollAffordance progress={progress} />}
     </div>
+  );
+}
+
+/**
+ * A progress line and a hint that the page responds to scrolling.
+ *
+ * The most common way one of these pages fails is a visitor looking at a static
+ * hero and leaving, never learning there was anything else. The hint retires as
+ * soon as they scroll, because by then it has done its job.
+ */
+function ScrollAffordance({ progress }: Readonly<{ progress: number }>) {
+  return (
+    <>
+      {/*
+        Both of these carry their own dark backing rather than relying on the
+        footage behind them. They sit outside the measured scrim, so over bright
+        frames a plain white-on-transparent treatment disappears — and a scroll
+        cue nobody can see is the same as no cue at all.
+      */}
+      <div className="pointer-events-none fixed inset-x-0 top-0 h-0.5 bg-black/30">
+        <div
+          className="h-full bg-white/70 transition-[width] duration-75"
+          style={{ width: `${Math.round(progress * 100)}%` }}
+        />
+      </div>
+
+      <div
+        className="pointer-events-none fixed inset-x-0 bottom-8 flex justify-center transition-opacity duration-500"
+        style={{ opacity: progress > HINT_FADES_AT ? 0 : 1 }}
+      >
+        <p className="rounded-full bg-black/45 px-4 py-2 text-xs uppercase tracking-[0.35em] text-white/80">
+          Scroll
+        </p>
+      </div>
+    </>
   );
 }
 
@@ -247,21 +311,17 @@ function BeatOverlay({
   sequence: Sequence;
   frame: number;
 }>) {
-  // An inactive beat is hidden outright rather than left at zero opacity.
-  // Zero-opacity elements stay in the accessibility tree, so leaving all four
-  // mounted and visible would have a screen reader read the entire story as one
-  // undifferentiated block.
-  //
-  // The cost is that only the active beat is in the rendered text, so right now
-  // a crawler sees one heading. The fix is not to un-hide these — it is the
-  // separate always-present semantic block that #7 adds, with this animated
-  // layer marked aria-hidden.
   const hidden = opacity <= 0.001;
 
   const rect =
     typeof window === "undefined"
       ? { x0: 0, y0: 0, x1: 1, y1: 1 }
-      : visibleRect(innerWidth, innerHeight, sequence, computeScale(innerWidth, innerHeight, sequence));
+      : visibleRect(
+          innerWidth,
+          innerHeight,
+          sequence,
+          computeScale(innerWidth, innerHeight, sequence),
+        );
 
   const scrim = scrimOpacity(sequence, frame, beat, rect);
   const bottom = beat.anchor === "bottom";
@@ -281,7 +341,6 @@ function BeatOverlay({
           This holds full strength across the text and falls off past it.
         */}
         <div
-          aria-hidden
           className="absolute -inset-x-12 -inset-y-10"
           style={{
             background: `radial-gradient(ellipse at center, rgb(0 0 0 / ${scrim}) 0%, rgb(0 0 0 / ${scrim * 0.85}) 45%, rgb(0 0 0 / 0) 75%)`,
