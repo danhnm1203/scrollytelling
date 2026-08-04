@@ -2,9 +2,15 @@
 #
 # Installs this skill so an agent can invoke it as /open-scrolltelling.
 #
-# The directory name is what the slash command resolves against — it has to
-# match the `name:` in SKILL.md exactly. That is the one detail worth automating,
-# because getting it wrong fails silently: the skill simply never appears.
+# The fallback path. Prefer the plugin marketplace or the skills CLI:
+#
+#   /plugin marketplace add danhnm1203/open-scrolltelling
+#   npx skills add danhnm1203/open-scrolltelling
+#
+# This exists for agents those do not cover, and it gets one detail right that
+# is easy to miss by hand: the slash command resolves against the directory
+# name under ~/.claude/skills, which must match the `name:` in SKILL.md
+# exactly. Getting it wrong fails silently — the skill simply never appears.
 #
 #   ./install-skill.sh              symlink, so `git pull` updates the skill
 #   ./install-skill.sh --copy       copy instead, to pin this version
@@ -13,10 +19,10 @@ set -euo pipefail
 
 SKILL_NAME="open-scrolltelling"
 SOURCE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SOURCE_FILE="$SOURCE_DIR/SKILL.md"
+SOURCE_FILE="$SOURCE_DIR/skills/$SKILL_NAME/SKILL.md"
 TARGET_DIR="${CLAUDE_SKILLS_DIR:-$HOME/.claude/skills}/$SKILL_NAME"
 
-[ -f "$SOURCE_FILE" ] || { echo "No SKILL.md beside this script." >&2; exit 1; }
+[ -f "$SOURCE_FILE" ] || { echo "No skill at $SOURCE_FILE" >&2; exit 1; }
 
 # The name in the file is the source of truth; the directory has to follow it.
 declared="$(awk -F': *' '/^name:/ {print $2; exit}' "$SOURCE_FILE" | tr -d '\r')"

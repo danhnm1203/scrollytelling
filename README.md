@@ -23,13 +23,21 @@ it and bring their own binaries.
 
 ### Using it from a coding agent
 
-```bash
-git clone https://github.com/danhnm1203/open-scrolltelling.git ~/src/open-scrolltelling
-cd ~/src/open-scrolltelling && ./install-skill.sh
+Claude Code, as a plugin:
+
+```
+/plugin marketplace add danhnm1203/open-scrolltelling
+/plugin install open-scrolltelling@open-scrolltelling
 ```
 
-Start a new session and call it as `/open-scrolltelling`. The installer symlinks
-so `git pull` keeps it current; `--copy` pins this version.
+Codex and other agents:
+
+```bash
+npx skills add danhnm1203/open-scrolltelling
+```
+
+Or clone and copy `skills/open-scrolltelling` into `~/.claude/skills/`. Either
+way, start a new session and call it as `/open-scrolltelling`.
 
 ## Quickstart
 

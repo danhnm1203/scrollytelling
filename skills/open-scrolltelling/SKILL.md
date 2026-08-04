@@ -40,20 +40,35 @@ Once the package is published, drop the `github:` prefix from either form.
 Node 20 or newer. `sharp` and `ffmpeg-static` come with it and bring their own
 binaries, so nothing needs installing system-wide.
 
-**The skill.** Clone the repo and run the installer:
+**The skill.** Three ways, depending on your agent.
 
-```bash
-git clone https://github.com/danhnm1203/open-scrolltelling.git ~/src/open-scrolltelling
-cd ~/src/open-scrolltelling && ./install-skill.sh
+Claude Code, as a plugin:
+
+```
+/plugin marketplace add danhnm1203/open-scrolltelling
+/plugin install open-scrolltelling@open-scrolltelling
 ```
 
-Start a new agent session and it is available as **`/open-scrolltelling`**.
+Codex and other agents, via the skills CLI:
 
-The installer symlinks, so `git pull` updates the skill too; pass `--copy` to pin
-this version instead. It exists mainly to get one detail right: the slash command
-resolves against the *directory* name under `~/.claude/skills/`, which must match
-the `name:` in this file exactly. Getting that wrong fails silently — the skill
-simply never appears.
+```bash
+npx skills add danhnm1203/open-scrolltelling
+npx skills add danhnm1203/open-scrolltelling -a codex
+```
+
+Or by hand:
+
+```bash
+git clone https://github.com/danhnm1203/open-scrolltelling.git
+cp -R open-scrolltelling/skills/open-scrolltelling ~/.claude/skills/
+```
+
+`./install-skill.sh` in the clone does the same thing and checks the one detail
+that is easy to get wrong: the slash command resolves against the *directory*
+name, which must match the `name:` in this file. A mismatch fails silently — the
+skill simply never appears.
+
+Start a new session and it is available as **`/open-scrolltelling`**.
 
 ## Workflow
 
