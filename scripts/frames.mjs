@@ -1,14 +1,440 @@
 /**
  * Frame extraction, measurement and encoding.
  *
- * NOT IMPLEMENTED YET — tasks T4, T8, T13, T14, T16, E3, E6, E10, E16.
- * The skeleton exists so `bin/cli.mjs` fails with a sentence instead of a
- * module-resolution stack trace.
+ *   video or stills ──▶ sample ──▶ decode once ──▶ measure ──▶ encode ──▶ swap
+ *                                       │
+ *                                       ├─▶ edgeColor   the page's background
+ *                                       └─▶ lumaGrid    the text scrim
+ *
+ * One decode per frame. The luminance grid comes from resizing straight to the
+ * grid — the resampler averages each cell better and faster than doing it by
+ * hand — and the edge color is read from a second small raw buffer. Measuring
+ * with two dozen separate crop-and-stat calls per frame, as an earlier draft
+ * did, costs roughly 29 operations per frame and makes the measurement
+ * unreachable from a unit test.
+ *
+ * Output goes to `frames.partial/` and is renamed into place at the very end,
+ * so a run that dies halfway leaves a working sequence untouched.
  */
 
-export async function run(_positionals, _flags) {
-  process.stderr.write(
-    "open-scrolltelling: `frames` is not implemented yet (tasks T4/T8/T14/T16/E3/E10/E16).\n",
+import { spawn } from "node:child_process";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  renameSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { basename, extname, join } from "node:path";
+
+import { edgeColor, lumaGrid, LUMA_COLS, LUMA_ROWS } from "../lib/measure.mjs";
+import { naturalCompare, decimate, timestampsFor } from "../lib/sequence-plan.mjs";
+
+const IMAGE_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".webp", ".tif", ".tiff", ".avif"]);
+const VIDEO_EXTENSIONS = new Set([".mp4", ".mov", ".webm", ".mkv", ".avi", ".m4v"]);
+
+const DEFAULTS = { frames: 50, maxWidth: 1280, quality: 82 };
+const PREVIEW_FRAMES = 5;
+
+/** Aspect differences under this are a rounding artifact; over it, a mistake. */
+const ASPECT_TOLERANCE = 0.02;
+
+/** Warn above this; the page waits on every byte before it can scrub. */
+const HEAVY_SEQUENCE_BYTES = 6 * 1024 * 1024;
+
+class PipelineError extends Error {}
+
+/* ------------------------------------------------------------------ deps -- */
+
+/**
+ * Both native dependencies live in this package rather than in the generated
+ * project, so nothing else installs them on the user's behalf. When they are
+ * missing the user needs a command, not a module-resolution stack trace.
+ */
+async function loadDependencies() {
+  let sharp;
+  try {
+    ({ default: sharp } = await import("sharp"));
+  } catch (err) {
+    throw new PipelineError(
+      "sharp could not be loaded — it ships prebuilt binaries and has none for this platform.\n" +
+        "  Try: npm install --include=optional sharp\n" +
+        `  Original error: ${err.message}`,
+    );
+  }
+
+  let ffmpegPath;
+  try {
+    ({ default: ffmpegPath } = await import("ffmpeg-static"));
+  } catch (err) {
+    ffmpegPath = null;
+    void err;
+  }
+
+  return { sharp, ffmpegPath };
+}
+
+function requireFfmpeg(ffmpegPath) {
+  if (ffmpegPath && existsSync(ffmpegPath)) return ffmpegPath;
+  throw new PipelineError(
+    "the bundled ffmpeg binary is missing — it downloads at install time, which a proxy or\n" +
+      "an offline install can block.\n" +
+      "  Try: npm rebuild ffmpeg-static",
   );
-  return 3;
+}
+
+/* ------------------------------------------------------------------ input -- */
+
+function classifyInput(inputPath) {
+  if (!existsSync(inputPath)) {
+    throw new PipelineError(`no such file or directory: ${inputPath}`);
+  }
+
+  if (statSync(inputPath).isDirectory()) {
+    const files = readdirSync(inputPath)
+      .filter((f) => IMAGE_EXTENSIONS.has(extname(f).toLowerCase()))
+      .sort(naturalCompare)
+      .map((f) => join(inputPath, f));
+
+    if (files.length === 0) {
+      throw new PipelineError(
+        `${inputPath} contains no images.\n` +
+          `  Accepted extensions: ${[...IMAGE_EXTENSIONS].join(", ")}`,
+      );
+    }
+    return { kind: "stills", files };
+  }
+
+  const ext = extname(inputPath).toLowerCase();
+  if (IMAGE_EXTENSIONS.has(ext)) return { kind: "stills", files: [inputPath] };
+  if (!VIDEO_EXTENSIONS.has(ext)) {
+    throw new PipelineError(
+      `${inputPath} is not a recognized video or image.\n` +
+        `  Videos: ${[...VIDEO_EXTENSIONS].join(", ")}`,
+    );
+  }
+  return { kind: "video", file: inputPath };
+}
+
+/* ----------------------------------------------------------------- ffmpeg -- */
+
+/**
+ * Always an argument array, never a shell string. A path is user input, and a
+ * filename containing shell metacharacters must be handled like any other.
+ */
+function ffmpeg(ffmpegPath, args) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(ffmpegPath, args, { stdio: ["ignore", "ignore", "pipe"] });
+    let stderr = "";
+    child.stderr.on("data", (d) => (stderr += d));
+    child.on("error", reject);
+    child.on("close", (code) => resolve({ code, stderr }));
+  });
+}
+
+/** Duration in seconds, or null when the container does not report one. */
+async function probeDuration(ffmpegPath, file) {
+  const { stderr } = await ffmpeg(ffmpegPath, ["-i", file]);
+  const m = /Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)/.exec(stderr);
+  if (!m) return null;
+  return Number(m[1]) * 3600 + Number(m[2]) * 60 + Number(m[3]);
+}
+
+/**
+ * Extracts frames at evenly spaced timestamps.
+ *
+ * `-ss` before `-i` seeks first and decodes from there, so cost tracks the
+ * number of frames wanted rather than the length of the clip. It has been
+ * frame-accurate since ffmpeg 2.1.
+ */
+async function extractFromVideo(ffmpegPath, file, count, workDir) {
+  const duration = await probeDuration(ffmpegPath, file);
+  const files = [];
+  const warnings = [];
+
+  if (duration === null) {
+    // Fragmented MP4 and variable-frame-rate sources often report no duration.
+    // One decode pass is slower than seeking but always works.
+    warnings.push("the source reports no duration; falling back to one decode pass");
+    const pattern = join(workDir, "src_%05d.png");
+    const { code, stderr } = await ffmpeg(ffmpegPath, [
+      "-i",
+      file,
+      "-vsync",
+      "0",
+      "-y",
+      pattern,
+    ]);
+    if (code !== 0) throw new PipelineError(`ffmpeg failed:\n${stderr.trim()}`);
+
+    const produced = readdirSync(workDir).filter((f) => f.startsWith("src_")).sort(naturalCompare);
+    if (produced.length === 0) throw new PipelineError("ffmpeg produced no frames from the source");
+    return { files: decimate(produced, count).map((f) => join(workDir, f)), warnings };
+  }
+
+  const marks = timestampsFor(duration, count);
+  for (const [i, at] of marks.entries()) {
+    const out = join(workDir, `src_${String(i).padStart(5, "0")}.png`);
+    const { code, stderr } = await ffmpeg(ffmpegPath, [
+      "-ss",
+      String(at),
+      "-i",
+      file,
+      "-frames:v",
+      "1",
+      "-y",
+      out,
+    ]);
+    if (code !== 0) throw new PipelineError(`ffmpeg failed at ${at}s:\n${stderr.trim()}`);
+    if (!existsSync(out)) {
+      warnings.push(`no frame at ${at.toFixed(2)}s; skipped`);
+      continue;
+    }
+    files.push(out);
+  }
+
+  if (files.length === 0) throw new PipelineError("ffmpeg produced no frames from the source");
+  return { files, warnings };
+}
+
+/* ------------------------------------------------------------- measuring -- */
+
+/** Decodes one frame once, measures it, and writes the encoded webp. */
+async function processFrame(sharp, sourcePath, targetPath, { width, height, quality }) {
+  const pipeline = sharp(sourcePath).resize(width, height, { fit: "fill" });
+
+  const [gridRaw, edgeRaw] = await Promise.all([
+    pipeline.clone().resize(LUMA_COLS, LUMA_ROWS, { fit: "fill" }).removeAlpha().raw().toBuffer(),
+    // Small enough to read cheaply, large enough for a meaningful border band.
+    pipeline.clone().resize(64, 64, { fit: "fill" }).removeAlpha().raw().toBuffer(),
+  ]);
+
+  await pipeline.clone().webp({ quality }).toFile(targetPath);
+
+  return {
+    edge: edgeColor(edgeRaw, 64, 64),
+    luma: lumaGrid(gridRaw, LUMA_COLS, LUMA_ROWS),
+  };
+}
+
+/**
+ * The dimensions every frame is resized to.
+ *
+ * Small aspect differences are normalized: a render that came out a pixel short
+ * should not cost someone an entire run. A large one is a genuine mistake and
+ * is named.
+ */
+async function resolveGeometry(sharp, files, maxWidth) {
+  const first = await sharp(files[0]).metadata();
+  const aspect = first.width / first.height;
+
+  for (const f of files.slice(1)) {
+    const meta = await sharp(f).metadata();
+    const theirs = meta.width / meta.height;
+    if (Math.abs(theirs - aspect) / aspect > ASPECT_TOLERANCE) {
+      throw new PipelineError(
+        `${basename(f)} has aspect ratio ${theirs.toFixed(3)}, but the sequence is ` +
+          `${aspect.toFixed(3)}.\n  Every frame must share one shape.`,
+      );
+    }
+  }
+
+  const width = Math.min(maxWidth, first.width);
+  return { width, height: Math.max(1, Math.round(width / aspect)) };
+}
+
+/* -------------------------------------------------------------- contract -- */
+
+function renderContract(sequences) {
+  const json = JSON.stringify(
+    sequences.map((s) => ({
+      id: s.id,
+      width: s.width,
+      height: s.height,
+      totalFrames: s.totalFrames,
+      edgeColors: s.edgeColors,
+      lumaGrid: s.lumaGrid,
+    })),
+    null,
+    2,
+  );
+
+  return `// GENERATED by \`open-scrolltelling frames\` — do not edit.
+// Re-run the command instead; editing this file makes it disagree with the
+// images in public/frames/, and the page will hold one frame forever without
+// reporting anything.
+
+export type Sequence = {
+  id: string;
+  width: number;
+  height: number;
+  totalFrames: number;
+  /** That frame's own border color. The page paints it behind the canvas. */
+  edgeColors: readonly (readonly [number, number, number])[];
+  /** ${LUMA_COLS} columns x ${LUMA_ROWS} rows, row-major, 0..1. */
+  lumaGrid: readonly (readonly number[])[];
+};
+
+export const LUMA_COLS = ${LUMA_COLS};
+export const LUMA_ROWS = ${LUMA_ROWS};
+
+/**
+ * Ordered by preference. The page picks whichever sequence best matches the
+ * viewport; a single entry is the normal case until a portrait crop is added.
+ */
+export const SEQUENCES = ${json} as const satisfies readonly Sequence[];
+
+export function framePath(sequenceId: string, index: number): string {
+  return \`/frames/\${sequenceId}_\${index}.webp\`;
+}
+`;
+}
+
+/* ------------------------------------------------------------------- run -- */
+
+export async function run(positionals, flags = {}) {
+  try {
+    return await frames(positionals, flags);
+  } catch (err) {
+    if (err instanceof PipelineError) {
+      process.stderr.write(`open-scrolltelling: ${err.message}\n`);
+      return 1;
+    }
+    process.stderr.write(`open-scrolltelling: ${err.message}\n`);
+    return 1;
+  }
+}
+
+async function frames(positionals, flags) {
+  const { sharp, ffmpegPath } = await loadDependencies();
+
+  if (flags.preview) return previewMode(positionals, flags, { sharp, ffmpegPath });
+
+  const [inputPath, projectDir] = positionals;
+  if (!inputPath || !projectDir) {
+    throw new PipelineError(
+      "frames needs an input and a project directory.\n" +
+        "  Try: frames ./clip.mp4 ./my-site\n" +
+        "  Or:  frames --preview ./clip.mp4",
+    );
+  }
+
+  const requested = Number(flags.frames ?? DEFAULTS.frames);
+  const maxWidth = Number(flags["max-width"] ?? flags.maxWidth ?? DEFAULTS.maxWidth);
+  const quality = Number(flags.quality ?? DEFAULTS.quality);
+
+  const input = classifyInput(inputPath);
+  const workDir = mkdtempSync(join(tmpdir(), "ost-work-"));
+  const partial = join(projectDir, "public", "frames.partial");
+  const final = join(projectDir, "public", "frames");
+
+  try {
+    const { sources, warnings } = await gatherSources(input, requested, workDir, ffmpegPath);
+
+    if (sources.length < requested) {
+      warnings.push(`only ${sources.length} frames available; using all of them`);
+    }
+
+    const geometry = await resolveGeometry(sharp, sources, maxWidth);
+
+    rmSync(partial, { recursive: true, force: true });
+    mkdirSync(partial, { recursive: true });
+
+    const edgeColors = [];
+    const lumaGridRows = [];
+    let bytes = 0;
+
+    for (const [i, source] of sources.entries()) {
+      const target = join(partial, `landscape_${i}.webp`);
+      const { edge, luma } = await processFrame(sharp, source, target, { ...geometry, quality });
+      edgeColors.push(edge);
+      lumaGridRows.push(luma);
+      bytes += statSync(target).size;
+    }
+
+    const sequence = {
+      id: "landscape",
+      ...geometry,
+      totalFrames: sources.length,
+      edgeColors,
+      lumaGrid: lumaGridRows,
+    };
+
+    // Everything succeeded: swap the new sequence in and write the contract.
+    // Until this point a failure leaves the previous sequence untouched.
+    rmSync(final, { recursive: true, force: true });
+    renameSync(partial, final);
+
+    mkdirSync(join(projectDir, "components"), { recursive: true });
+    writeFileSync(join(projectDir, "components", "frames.ts"), renderContract([sequence]));
+
+    report({ sequence, bytes, warnings });
+    return 0;
+  } finally {
+    rmSync(workDir, { recursive: true, force: true });
+    rmSync(partial, { recursive: true, force: true });
+  }
+}
+
+async function gatherSources(input, requested, workDir, ffmpegPath) {
+  if (input.kind === "stills") {
+    return { sources: decimate(input.files, requested), warnings: [] };
+  }
+  const { files, warnings } = await extractFromVideo(
+    requireFfmpeg(ffmpegPath),
+    input.file,
+    requested,
+    workDir,
+  );
+  return { sources: files, warnings };
+}
+
+async function previewMode(positionals, flags, { sharp, ffmpegPath }) {
+  const [inputPath] = positionals;
+  if (!inputPath) throw new PipelineError("preview needs a video or a directory of stills");
+
+  const input = classifyInput(inputPath);
+  const outDir = mkdtempSync(join(tmpdir(), "ost-preview-"));
+  const workDir = mkdtempSync(join(tmpdir(), "ost-work-"));
+
+  try {
+    const { sources } = await gatherSources(input, PREVIEW_FRAMES, workDir, ffmpegPath);
+    for (const [i, source] of sources.entries()) {
+      await sharp(source)
+        .resize(640, null, { withoutEnlargement: true })
+        .png()
+        .toFile(join(outDir, `preview_${i}.png`));
+    }
+
+    process.stdout.write(
+      `Wrote ${sources.length} preview frames to ${outDir}\n\n` +
+        "Look at them, then write your copy against what the footage is doing.\n",
+    );
+    return 0;
+  } finally {
+    rmSync(workDir, { recursive: true, force: true });
+  }
+}
+
+function report({ sequence, bytes, warnings }) {
+  const mb = (bytes / 1024 / 1024).toFixed(2);
+  const lines = [
+    `Wrote ${sequence.totalFrames} frames at ${sequence.width}x${sequence.height} (${mb} MB)`,
+  ];
+
+  if (bytes > HEAVY_SEQUENCE_BYTES) {
+    lines.push(
+      `  This is heavy. Every byte is downloaded before the page can scrub —`,
+      `  consider fewer frames or a smaller --max-width.`,
+    );
+  }
+
+  for (const w of warnings) lines.push(`  note: ${w}`);
+
+  lines.push("", "Next: edit components/story.ts, then run with --check.");
+  process.stdout.write(`${lines.join("\n")}\n`);
 }
