@@ -1,0 +1,17 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "open-scrolltelling",
+  "description": "Turn a video into a scroll-scrubbed Next.js landing page, with every frame measured so the seams disappear.",
+  "owner": {
+    "name": "danhnm1203"
+  },
+  "plugins": [
+    {
+      "name": "open-scrolltelling",
+      "source": "./",
+      "skills": ["./skills/open-scrolltelling"],
+      "description": "Turn a video or an ordered image folder into a scroll-scrubbed Next.js landing page. The clip advances frame by frame as the visitor scrolls, with copy beats fading in over it. Use for a scrollytelling hero, a scroll-linked product reveal, an Apple-style scroll animation, or to turn footage into a landing page.",
+      "category": "design"
+    }
+  ]
+}

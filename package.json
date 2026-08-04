@@ -16,7 +16,8 @@
     "lib",
     "scripts",
     "templates",
-    "SKILL.md"
+    "skills",
+    ".claude-plugin"
   ],
   "engines": {
     "node": ">=20"
