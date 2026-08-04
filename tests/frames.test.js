@@ -105,11 +105,12 @@ describe("frames — from a directory of stills", () => {
     const src = readContract(project);
     const sequences = contractValue(src, "SEQUENCES");
 
-    assert.equal(sequences.length, 1, "one sequence until portrait lands");
-    const [seq] = sequences;
-    assert.equal(seq.totalFrames, 6);
-    assert.equal(seq.edgeColors.length, seq.totalFrames);
-    assert.equal(seq.lumaGrid.length, seq.totalFrames);
+    assert.ok(sequences.length >= 1, "at least the landscape sequence");
+    for (const seq of sequences) {
+      assert.equal(seq.totalFrames, 6, `${seq.id} frame count`);
+      assert.equal(seq.edgeColors.length, seq.totalFrames, `${seq.id} edgeColors`);
+      assert.equal(seq.lumaGrid.length, seq.totalFrames, `${seq.id} lumaGrid`);
+    }
   });
 
   it("gives every frame a full luminance grid", () => {
@@ -266,6 +267,119 @@ describe("frames — failure paths", () => {
     const { code } = await runCapturing([src, project], { frames: 2 });
 
     assert.equal(code, 0, "a 1px difference should be normalized, not fatal");
+  });
+});
+
+describe("frames — portrait sequence", () => {
+  let project;
+
+  before(async () => {
+    project = join(tempDir(), "site");
+    mkdirSync(join(project, "components"), { recursive: true });
+    const src = await stillsDir(10, { width: 320, height: 180 });
+    const { code } = await runCapturing([src, project], { frames: 5 });
+    assert.equal(code, 0);
+  });
+
+  it("produces a landscape and a portrait sequence by default", () => {
+    // Portrait is not opt-in: a phone showing a contained widescreen frame is
+    // the defect this exists to remove, and most landing-page traffic is phones.
+    const seqs = contractValue(readContract(project), "SEQUENCES");
+    assert.deepEqual(
+      seqs.map((s) => s.id).sort(),
+      ["landscape", "portrait"],
+    );
+  });
+
+  it("gives the portrait sequence a taller-than-wide shape", () => {
+    const portrait = contractValue(readContract(project), "SEQUENCES").find(
+      (s) => s.id === "portrait",
+    );
+    assert.ok(portrait.height > portrait.width, `${portrait.width}x${portrait.height} is not tall`);
+  });
+
+  it("keeps each sequence internally consistent", () => {
+    for (const seq of contractValue(readContract(project), "SEQUENCES")) {
+      assert.equal(seq.edgeColors.length, seq.totalFrames, `${seq.id} edgeColors`);
+      assert.equal(seq.lumaGrid.length, seq.totalFrames, `${seq.id} lumaGrid`);
+      for (const cells of seq.lumaGrid) assert.equal(cells.length, 24, `${seq.id} grid width`);
+    }
+  });
+
+  it("writes frames for both sequences", () => {
+    assert.ok(existsSync(join(project, "public/frames/landscape_0.webp")));
+    assert.ok(existsSync(join(project, "public/frames/portrait_0.webp")));
+  });
+
+  it("can be skipped when the extra weight is not wanted", async () => {
+    const dest = join(tempDir(), "site");
+    mkdirSync(join(dest, "components"), { recursive: true });
+    const src = await stillsDir(6, { width: 320, height: 180 });
+
+    await runCapturing([src, dest], { frames: 3, "skip-portrait": true });
+
+    const seqs = contractValue(readContract(dest), "SEQUENCES");
+    assert.deepEqual(seqs.map((s) => s.id), ["landscape"]);
+  });
+
+  it("aims the crop with --focus", async () => {
+    // A gradient that runs dark on the left to bright on the right, so where
+    // the crop lands is visible in the measured border color.
+    const src = tempDir();
+    for (let i = 0; i < 4; i++) {
+      await sharp({
+        create: { width: 320, height: 180, channels: 3, background: "#000000" },
+      })
+        .composite([
+          {
+            input: {
+              create: { width: 160, height: 180, channels: 3, background: "#ffffff" },
+            },
+            left: 160,
+            top: 0,
+          },
+        ])
+        .png()
+        .toFile(join(src, `f_${i}.png`));
+    }
+
+    const readEdge = async (focus) => {
+      const dest = join(tempDir(), "site");
+      mkdirSync(join(dest, "components"), { recursive: true });
+      await runCapturing([src, dest], { frames: 2, focus });
+      const portrait = contractValue(readContract(dest), "SEQUENCES").find(
+        (s) => s.id === "portrait",
+      );
+      return portrait.edgeColors[0][0];
+    };
+
+    const left = await readEdge(0.15);
+    const right = await readEdge(0.85);
+    assert.ok(right > left, `focus 0.85 (${right}) should be brighter than 0.15 (${left})`);
+  });
+
+  it("rejects a focus outside the frame", async () => {
+    const dest = join(tempDir(), "site");
+    mkdirSync(join(dest, "components"), { recursive: true });
+    const src = await stillsDir(4, { width: 320, height: 180 });
+
+    const { code, stderr } = await runCapturing([src, dest], { frames: 2, focus: 5 });
+
+    assert.notEqual(code, 0);
+    assert.match(stderr, /focus/i);
+  });
+
+  it("skips portrait when the source is already tall", async () => {
+    // Cropping a portrait source to portrait would just shave its sides off
+    // for no benefit.
+    const dest = join(tempDir(), "site");
+    mkdirSync(join(dest, "components"), { recursive: true });
+    const src = await stillsDir(4, { width: 180, height: 320 });
+
+    await runCapturing([src, dest], { frames: 2 });
+
+    const seqs = contractValue(readContract(dest), "SEQUENCES");
+    assert.equal(seqs.length, 1, "a tall source needs no second sequence");
   });
 });
 

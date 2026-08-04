@@ -46,6 +46,15 @@ const ASPECT_TOLERANCE = 0.02;
 /** Warn above this; the page waits on every byte before it can scrub. */
 const HEAVY_SEQUENCE_BYTES = 6 * 1024 * 1024;
 
+/**
+ * The shape of the portrait sequence.
+ *
+ * 9:16 rather than a specific handset ratio: it is close enough to every tall
+ * phone that `computeScale` fills the screen instead of letterboxing, without
+ * cropping so hard that the subject disappears on the roomier ones.
+ */
+const PORTRAIT_ASPECT = 9 / 16;
+
 class PipelineError extends Error {}
 
 /* ------------------------------------------------------------------ deps -- */
@@ -204,8 +213,9 @@ async function extractFromVideo(ffmpegPath, file, count, workDir) {
 /* ------------------------------------------------------------- measuring -- */
 
 /** Decodes one frame once, measures it, and writes the encoded webp. */
-async function processFrame(sharp, sourcePath, targetPath, { width, height, quality }) {
-  const pipeline = sharp(sourcePath).resize(width, height, { fit: "fill" });
+async function processFrame(sharp, sourcePath, targetPath, { width, height, quality, crop }) {
+  const source = sharp(sourcePath);
+  const pipeline = (crop ? source.extract(crop) : source).resize(width, height, { fit: "fill" });
 
   const [gridRaw, edgeRaw] = await Promise.all([
     pipeline.clone().resize(LUMA_COLS, LUMA_ROWS, { fit: "fill" }).removeAlpha().raw().toBuffer(),
@@ -245,6 +255,52 @@ async function resolveGeometry(sharp, files, maxWidth) {
 
   const width = Math.min(maxWidth, first.width);
   return { width, height: Math.max(1, Math.round(width / aspect)) };
+}
+
+/**
+ * Which sequences to build from this source.
+ *
+ * Landscape is always the source as shot. Portrait is a tall crop of it, so a
+ * phone gets a composition framed for a phone rather than a widescreen frame
+ * shrunk into the middle of the screen. `focus` aims that crop horizontally,
+ * because the centre is not always where the subject is.
+ *
+ *   source 1280x720, focus 0.5        source 1280x720, focus 0.2
+ *   +--------[====]--------+          +--[====]--------------+
+ *            crop                        crop
+ */
+function planSequences({ width, height, maxWidth, focus, skipPortrait }) {
+  const landscapeWidth = Math.min(maxWidth, width);
+  const plans = [
+    {
+      id: "landscape",
+      crop: null,
+      width: landscapeWidth,
+      height: Math.max(1, Math.round(landscapeWidth / (width / height))),
+    },
+  ];
+
+  if (skipPortrait) return plans;
+
+  const cropWidth = Math.round(height * PORTRAIT_ASPECT);
+  if (cropWidth >= width) {
+    // Already at least as tall as the portrait target. Cropping it to portrait
+    // would shave the sides off for no benefit.
+    return plans;
+  }
+
+  const centre = focus * width;
+  const left = Math.round(Math.min(Math.max(centre - cropWidth / 2, 0), width - cropWidth));
+  const portraitWidth = Math.min(maxWidth, cropWidth);
+
+  plans.push({
+    id: "portrait",
+    crop: { left, top: 0, width: cropWidth, height },
+    width: portraitWidth,
+    height: Math.max(1, Math.round(portraitWidth / PORTRAIT_ASPECT)),
+  });
+
+  return plans;
 }
 
 /* -------------------------------------------------------------- contract -- */
@@ -326,6 +382,14 @@ async function frames(positionals, flags) {
   const requested = Number(flags.frames ?? DEFAULTS.frames);
   const maxWidth = Number(flags["max-width"] ?? flags.maxWidth ?? DEFAULTS.maxWidth);
   const quality = Number(flags.quality ?? DEFAULTS.quality);
+  const focus = Number(flags.focus ?? 0.5);
+  const skipPortrait = Boolean(flags["skip-portrait"]);
+
+  if (!Number.isFinite(focus) || focus < 0 || focus > 1) {
+    throw new PipelineError(
+      `--focus must be between 0 and 1 (left edge to right edge); got ${flags.focus}.`,
+    );
+  }
 
   const input = classifyInput(inputPath);
   const workDir = mkdtempSync(join(tmpdir(), "ost-work-"));
@@ -339,40 +403,55 @@ async function frames(positionals, flags) {
       warnings.push(`only ${sources.length} frames available; using all of them`);
     }
 
-    const geometry = await resolveGeometry(sharp, sources, maxWidth);
+    const source = await resolveGeometry(sharp, sources, maxWidth);
+    const plans = planSequences({ ...source, maxWidth, focus, skipPortrait });
+
+    if (!skipPortrait && plans.length === 1) {
+      warnings.push("the source is already tall, so no separate portrait sequence was needed");
+    }
 
     rmSync(partial, { recursive: true, force: true });
     mkdirSync(partial, { recursive: true });
 
-    const edgeColors = [];
-    const lumaGridRows = [];
+    const sequences = [];
     let bytes = 0;
 
-    for (const [i, source] of sources.entries()) {
-      const target = join(partial, `landscape_${i}.webp`);
-      const { edge, luma } = await processFrame(sharp, source, target, { ...geometry, quality });
-      edgeColors.push(edge);
-      lumaGridRows.push(luma);
-      bytes += statSync(target).size;
+    for (const plan of plans) {
+      const edgeColors = [];
+      const lumaGridRows = [];
+
+      for (const [i, sourceFrame] of sources.entries()) {
+        const target = join(partial, `${plan.id}_${i}.webp`);
+        const { edge, luma } = await processFrame(sharp, sourceFrame, target, {
+          width: plan.width,
+          height: plan.height,
+          crop: plan.crop,
+          quality,
+        });
+        edgeColors.push(edge);
+        lumaGridRows.push(luma);
+        bytes += statSync(target).size;
+      }
+
+      sequences.push({
+        id: plan.id,
+        width: plan.width,
+        height: plan.height,
+        totalFrames: sources.length,
+        edgeColors,
+        lumaGrid: lumaGridRows,
+      });
     }
 
-    const sequence = {
-      id: "landscape",
-      ...geometry,
-      totalFrames: sources.length,
-      edgeColors,
-      lumaGrid: lumaGridRows,
-    };
-
-    // Everything succeeded: swap the new sequence in and write the contract.
-    // Until this point a failure leaves the previous sequence untouched.
+    // Everything succeeded: swap the new sequences in and write the contract.
+    // Until this point a failure leaves the previous ones untouched.
     rmSync(final, { recursive: true, force: true });
     renameSync(partial, final);
 
     mkdirSync(join(projectDir, "components"), { recursive: true });
-    writeFileSync(join(projectDir, "components", "frames.ts"), renderContract([sequence]));
+    writeFileSync(join(projectDir, "components", "frames.ts"), renderContract(sequences));
 
-    report({ sequence, bytes, warnings });
+    report({ sequences, bytes, warnings });
     return 0;
   } finally {
     rmSync(workDir, { recursive: true, force: true });
@@ -420,11 +499,11 @@ async function previewMode(positionals, flags, { sharp, ffmpegPath }) {
   }
 }
 
-function report({ sequence, bytes, warnings }) {
+function report({ sequences, bytes, warnings }) {
   const mb = (bytes / 1024 / 1024).toFixed(2);
-  const lines = [
-    `Wrote ${sequence.totalFrames} frames at ${sequence.width}x${sequence.height} (${mb} MB)`,
-  ];
+  const total = sequences.reduce((n, s) => n + s.totalFrames, 0);
+  const shapes = sequences.map((s) => `${s.id} ${s.width}x${s.height}`).join(", ");
+  const lines = [`Wrote ${total} frames across ${shapes} (${mb} MB)`];
 
   if (bytes > HEAVY_SEQUENCE_BYTES) {
     lines.push(

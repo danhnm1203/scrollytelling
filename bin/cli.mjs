@@ -16,7 +16,8 @@ frames options
   --frames <n>      number of frames in the sequence      (default 50)
   --max-width <px>  longest edge of the encoded webp      (default 1280)
   --quality <n>     webp quality, 1-100                   (default 82)
-  --focus <region>  crop region for the portrait sequence, WxH+X+Y
+  --focus <0-1>     where the portrait crop sits horizontally  (default 0.5)
+  --skip-portrait   build only the landscape sequence
 
 scaffold options
   --force           overwrite existing template files

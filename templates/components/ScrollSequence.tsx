@@ -56,6 +56,8 @@ export function ScrollSequence() {
   const imagesRef = useRef<(HTMLImageElement | null)[]>([]);
   const frameRef = useRef(0);
   const rafRef = useRef(0);
+  /** Latest story position, kept in a ref so a resize can read it without staleness. */
+  const progressRef = useRef(0);
 
   // Seeded with the first sequence rather than null so the server renders the
   // real page. Starting empty meant the pre-JavaScript HTML said "no frames
@@ -69,12 +71,34 @@ export function ScrollSequence() {
   });
   const [progress, setProgress] = useState(0);
 
-  // Re-pick once the real viewport is known, and again if it changes shape.
+  // Pick the sequence that suits this viewport, and hold the visitor's place
+  // across any resize.
+  //
+  // Page height is expressed in vh, so changing the viewport changes how far
+  // the page scrolls — and the two sequences can differ in frame count on top
+  // of that. Left alone, rotating a phone moves the scroll position under the
+  // visitor and drops them somewhere else in the story. Nothing errors, so the
+  // page simply reads as broken.
   useEffect(() => {
-    const pick = () => setSequence(selectSequence(innerWidth, innerHeight, SEQUENCES));
-    pick();
-    addEventListener("resize", pick);
-    return () => removeEventListener("resize", pick);
+    setSequence(selectSequence(innerWidth, innerHeight, SEQUENCES));
+
+    const onResize = () => {
+      // Read the position first: the moment layout changes, it is gone.
+      const target = progressRef.current;
+      setSequence(selectSequence(innerWidth, innerHeight, SEQUENCES));
+
+      // Restore after layout has settled. One frame is not always enough —
+      // the height depends on vh units the browser recomputes during resize.
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          const range = Math.max(1, document.body.scrollHeight - innerHeight);
+          scrollTo({ top: target * range });
+        });
+      });
+    };
+
+    addEventListener("resize", onResize);
+    return () => removeEventListener("resize", onResize);
   }, []);
 
   // Load the sequence. A frame that 404s is counted and named rather than
@@ -157,6 +181,7 @@ export function ScrollSequence() {
       const p = scrollProgress(scrollY, document.body.scrollHeight, vh);
       const exact = frameIndex(p, sequence.totalFrames);
       frameRef.current = exact;
+      progressRef.current = p;
       setProgress(p);
 
       const lo = Math.floor(exact);
