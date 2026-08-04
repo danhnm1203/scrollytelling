@@ -1,0 +1,9 @@
+node_modules/
+*.log
+.DS_Store
+
+# Scratch output from `frames --preview`
+.preview/
+
+# NOTE: a generated project commits its own public/frames/ — deploys need the
+# webp sequence in git. Nothing here may ignore it. See README, "Frames in git".

@@ -1,0 +1,39 @@
+{
+  "name": "open-scrolltelling",
+  "version": "0.1.0",
+  "description": "Turn a video into a scroll-scrubbed Next.js landing page. The clip plays frame by frame as the visitor scrolls.",
+  "license": "MIT",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/warrennguyen2/open-scrolltelling.git"
+  },
+  "bin": {
+    "open-scrolltelling": "./bin/cli.mjs"
+  },
+  "files": [
+    "bin",
+    "lib",
+    "scripts",
+    "templates",
+    "SKILL.md"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "node --test"
+  },
+  "dependencies": {
+    "ffmpeg-static": "5.3.0",
+    "sharp": "0.35.3"
+  },
+  "keywords": [
+    "scrollytelling",
+    "scroll-animation",
+    "image-sequence",
+    "canvas",
+    "nextjs",
+    "video"
+  ]
+}
