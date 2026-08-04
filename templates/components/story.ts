@@ -6,7 +6,7 @@
  * adding, moving or removing a beat means editing this list and nothing else.
  *
  * Place beats against what the footage is actually doing, not round numbers.
- * `open-scrolltelling frames --check <this project>` reads this file and tells
+ * `scrollytelling frames --check <this project>` reads this file and tells
  * you which beats will be hard to read against the frames behind them.
  */
 

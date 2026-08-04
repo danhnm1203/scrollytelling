@@ -167,7 +167,7 @@ describe("scaffold", () => {
     const dir = join(tempDir(), "site");
     await runCapturing([dir]);
 
-    const record = JSON.parse(readFileSync(join(dir, ".scrolltelling-version"), "utf8"));
+    const record = JSON.parse(readFileSync(join(dir, ".scrollytelling-version"), "utf8"));
     assert.ok(record.version, "expected a version");
     assert.ok(Object.keys(record.files).length > 5, "expected the installed files to be recorded");
     assert.ok(record.files["components/ScrollSequence.tsx"], "expected a hash per installed file");
@@ -200,13 +200,13 @@ describe("scaffold", () => {
     const { code, stdout } = await runCapturing([dir], { diff: true });
 
     assert.equal(code, 0, "a missing baseline is not an error");
-    assert.match(stdout, /no baseline|no \.scrolltelling-version/i);
+    assert.match(stdout, /no baseline|no \.scrollytelling-version/i);
   });
 
   it("survives a corrupt baseline instead of crashing", async () => {
     const dir = join(tempDir(), "site");
     await runCapturing([dir]);
-    writeFileSync(join(dir, ".scrolltelling-version"), "{ not json");
+    writeFileSync(join(dir, ".scrollytelling-version"), "{ not json");
 
     const { code, stdout } = await runCapturing([dir], { diff: true });
 
