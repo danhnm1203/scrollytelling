@@ -463,6 +463,99 @@ describe("frames — readability report", () => {
   });
 });
 
+describe("frames — per-beat check", () => {
+  /** A project with a generated sequence of the given uniform brightness. */
+  async function projectWith(shade, beats) {
+    const src = tempDir();
+    for (let i = 0; i < 6; i++) {
+      await sharp({
+        create: { width: 160, height: 90, channels: 3, background: { r: shade, g: shade, b: shade } },
+      })
+        .png()
+        .toFile(join(src, `f_${i}.png`));
+    }
+    const project = join(tempDir(), "site");
+    mkdirSync(join(project, "components"), { recursive: true });
+    await runCapturing([src, project], { frames: 6, "skip-portrait": true });
+
+    writeFileSync(
+      join(project, "components/story.ts"),
+      `export const story = { brand: "X", sections: ${JSON.stringify(beats)} };\n`,
+    );
+    return project;
+  }
+
+  it("names a beat sitting on bright footage", async () => {
+    const project = await projectWith(250, [
+      { at: 0.5, align: "left", heading: "Too bright", body: "..." },
+    ]);
+
+    const { code, stdout } = await runCapturing([project], { check: true });
+
+    assert.equal(code, 0);
+    assert.match(stdout, /Too bright/);
+  });
+
+  it("stays quiet about beats that read fine", async () => {
+    const project = await projectWith(5, [
+      { at: 0.5, align: "left", heading: "Reads fine", body: "..." },
+    ]);
+
+    const { code, stdout } = await runCapturing([project], { check: true });
+
+    assert.equal(code, 0);
+    assert.doesNotMatch(stdout, /Reads fine/);
+    assert.match(stdout, /nothing to change/i);
+  });
+
+  it("reports the luminance it measured, so the number is checkable", async () => {
+    const project = await projectWith(250, [
+      { at: 0.5, align: "center", heading: "Bright", body: "..." },
+    ]);
+
+    const { stdout } = await runCapturing([project], { check: true });
+    assert.match(stdout, /luma 0\.\d\d/);
+  });
+
+  it("explains that generation comes first when there are no frames", async () => {
+    const bare = join(tempDir(), "site");
+    mkdirSync(join(bare, "components"), { recursive: true });
+    writeFileSync(join(bare, "components/story.ts"), "export const story = { sections: [] };\n");
+
+    const { code, stderr } = await runCapturing([bare], { check: true });
+
+    assert.notEqual(code, 0);
+    assert.match(stderr, /generate/i);
+  });
+
+  it("explains when there is no copy to check", async () => {
+    const project = await projectWith(5, []);
+    rmSync(join(project, "components/story.ts"));
+
+    const { code, stderr } = await runCapturing([project], { check: true });
+
+    assert.notEqual(code, 0);
+    assert.match(stderr, /story\.ts/);
+  });
+
+  it("requires a project directory", async () => {
+    const { code, stderr } = await runCapturing([], { check: true });
+    assert.notEqual(code, 0);
+    assert.ok(stderr.length > 0);
+  });
+
+  it("needs no access to the source footage", async () => {
+    // The whole point of reading the generated contract: checking copy after
+    // an edit must not mean decoding the clip again.
+    const project = await projectWith(250, [
+      { at: 0.5, align: "left", heading: "Bright", body: "..." },
+    ]);
+
+    const { code } = await runCapturing([project], { check: true });
+    assert.equal(code, 0);
+  });
+});
+
 describe("frames — preview mode", () => {
   it("extracts a handful of frames without needing a project", async () => {
     const src = await stillsDir(20);

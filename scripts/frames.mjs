@@ -22,6 +22,7 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readFileSync,
   readdirSync,
   renameSync,
   rmSync,
@@ -33,7 +34,14 @@ import { basename, extname, join } from "node:path";
 
 import { edgeColor, lumaGrid, LUMA_COLS, LUMA_ROWS } from "../lib/measure.mjs";
 import { naturalCompare, decimate, timestampsFor } from "../lib/sequence-plan.mjs";
-import { regionLuma, maxEdgeDelta, REGIONS } from "../lib/report.mjs";
+import {
+  regionLuma,
+  maxEdgeDelta,
+  parseBeats,
+  parseSequences,
+  beatLuma,
+  REGIONS,
+} from "../lib/report.mjs";
 
 const IMAGE_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".webp", ".tif", ".tiff", ".avif"]);
 const VIDEO_EXTENSIONS = new Set([".mp4", ".mov", ".webm", ".mkv", ".avi", ".m4v"]);
@@ -52,6 +60,17 @@ const REPORT_BUCKETS = 6;
 
 /** Above this, interpolating the background between frames is visibly a pulse. */
 const PULSING_BACKGROUND_DELTA = 40;
+
+/**
+ * Luminance above which a block of copy needs warning about.
+ *
+ * The runtime scrim reaches its cap around 0.65, so past this the page is
+ * already doing everything it can and the copy is still fighting the footage.
+ */
+const HARD_TO_READ_LUMA = 0.55;
+
+/** How far either side to look for a calmer place to put a beat. */
+const SUGGESTION_RADIUS = 0.15;
 
 /**
  * The shape of the portrait sequence.
@@ -376,6 +395,7 @@ async function frames(positionals, flags) {
   const { sharp, ffmpegPath } = await loadDependencies();
 
   if (flags.preview) return previewMode(positionals, flags, { sharp, ffmpegPath });
+  if (flags.check) return checkMode(positionals);
 
   const [inputPath, projectDir] = positionals;
   if (!inputPath || !projectDir) {
@@ -575,4 +595,123 @@ function describeSequence(sequence) {
   }
 
   return lines;
+}
+
+/* ----------------------------------------------------------------- check -- */
+
+/**
+ * Reads the copy the builder wrote and names the beats that will be hard to
+ * read against the frames behind them.
+ *
+ * A separate command from generation because of ordering: frames come first,
+ * copy is written against the luminance table, and only then is there anything
+ * to check. It re-reads the generated contract rather than the source footage,
+ * so it costs nothing.
+ */
+async function checkMode(positionals) {
+  const [projectDir] = positionals;
+  if (!projectDir) {
+    throw new PipelineError("check needs a project directory. Try: frames --check ./my-site");
+  }
+
+  const framesPath = join(projectDir, "components", "frames.ts");
+  const storyPath = join(projectDir, "components", "story.ts");
+
+  if (!existsSync(framesPath)) {
+    throw new PipelineError(
+      `no generated frames found at ${framesPath}.\n` +
+        "  Generate a sequence first: open-scrolltelling frames <video> <project_dir>",
+    );
+  }
+  if (!existsSync(storyPath)) {
+    throw new PipelineError(
+      `no copy found at ${storyPath}.\n  Scaffold the project first, then write your beats.`,
+    );
+  }
+
+  const sequences = parseSequences(readFileSync(framesPath, "utf8"));
+  const beats = parseBeats(readFileSync(storyPath, "utf8"));
+
+  if (sequences.length === 0) {
+    throw new PipelineError(
+      "the generated contract has no sequences.\n  Run the frames command before checking copy.",
+    );
+  }
+  if (beats.length === 0) {
+    process.stdout.write("No beats to check — components/story.ts has an empty sections list.\n");
+    return 0;
+  }
+
+  const problems = [];
+  for (const [index, beat] of beats.entries()) {
+    for (const sequence of sequences) {
+      const luma = beatLuma(sequence, beat);
+      if (luma > HARD_TO_READ_LUMA) {
+        problems.push({ index, beat, sequence, luma });
+      }
+    }
+  }
+
+  process.stdout.write(`${formatCheck(beats, problems, sequences).join("\n")}\n`);
+  return 0;
+}
+
+function formatCheck(beats, problems, sequences) {
+  const lines = [
+    `Checked ${beats.length} beat${beats.length === 1 ? "" : "s"} against ` +
+      `${sequences.length} sequence${sequences.length === 1 ? "" : "s"}.`,
+    "",
+  ];
+
+  if (problems.length === 0) {
+    lines.push("Every beat sits on footage the scrim can handle. Nothing to change.");
+    return lines;
+  }
+
+  for (const { index, beat, sequence, luma } of problems) {
+    lines.push(
+      `  beat ${index + 1} "${beat.heading ?? ""}" at ${beat.at} (${beat.align ?? "center"}) ` +
+        `— ${sequence.id} luma ${luma.toFixed(2)}`,
+    );
+    for (const fix of suggestFixes(beat, sequence)) lines.push(`      ${fix}`);
+  }
+
+  lines.push(
+    "",
+    "Only beats that will fight the footage are listed; the rest are fine.",
+  );
+  return lines;
+}
+
+/** Concrete things to try, in the order most likely to work. */
+function suggestFixes(beat, sequence) {
+  const fixes = [];
+
+  if (beat.anchor !== "bottom") {
+    const below = beatLuma(sequence, { ...beat, anchor: "bottom" });
+    if (below < beatLuma(sequence, beat)) {
+      fixes.push(`anchor: "bottom" would sit on ${below.toFixed(2)} instead`);
+    }
+  }
+
+  // A calmer scroll position nearby, if there is one.
+  let best = null;
+  for (let delta = 0.01; delta <= SUGGESTION_RADIUS; delta += 0.01) {
+    for (const at of [beat.at - delta, beat.at + delta]) {
+      if (at < 0 || at > 1) continue;
+      const luma = beatLuma(sequence, { ...beat, at });
+      if (luma <= HARD_TO_READ_LUMA && (!best || luma < best.luma)) {
+        best = { at, luma };
+      }
+    }
+    if (best) break;
+  }
+  if (best) {
+    fixes.push(`at: ${best.at.toFixed(2)} would sit on ${best.luma.toFixed(2)}`);
+  }
+
+  if (fixes.length === 0) {
+    fixes.push("the footage is bright throughout here; consider different framing");
+  }
+  return fixes;
 }
