@@ -28,6 +28,18 @@ const TEMPLATES = fileURLToPath(new URL("../templates/", import.meta.url));
  */
 const RENAMES = new Map([["gitignore.template", ".gitignore"]]);
 
+/**
+ * Files copied from outside `templates/`, as [source, path in the project].
+ *
+ * The display math is deliberately NOT duplicated under templates/. One copy
+ * in this repo means it cannot drift from the version the tests cover — a
+ * checked-in duplicate would be a fork the moment someone edited one of them.
+ */
+const EXTRA_FILES = [
+  ["../lib/scroll-math.mjs", "lib/scroll-math.mjs"],
+  ["../lib/scroll-math.d.ts", "lib/scroll-math.d.ts"],
+];
+
 class ScaffoldError extends Error {}
 
 /**
@@ -88,8 +100,12 @@ function scaffold(positionals, flags) {
   const skipped = [];
   const overwrote = [];
 
-  for (const relPath of templateFiles()) {
-    const name = targetName(relPath);
+  const sources = [
+    ...templateFiles().map((rel) => [join(TEMPLATES, rel), targetName(rel)]),
+    ...EXTRA_FILES.map(([from, to]) => [fileURLToPath(new URL(from, import.meta.url)), to]),
+  ];
+
+  for (const [sourcePath, name] of sources) {
     const target = join(projectDir, name);
 
     if (existsSync(target)) {
@@ -103,7 +119,7 @@ function scaffold(positionals, flags) {
     }
 
     mkdirSync(dirname(target), { recursive: true });
-    copyFileSync(join(TEMPLATES, relPath), target);
+    copyFileSync(sourcePath, target);
   }
 
   report({ projectDir, written, skipped, overwrote, forced: Boolean(flags.force) });

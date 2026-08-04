@@ -57,6 +57,12 @@ describe("scaffold", () => {
       "app/page.tsx",
       "app/globals.css",
       "components/story.ts",
+      "components/frames.ts",
+      "components/ScrollSequence.tsx",
+      // Copied from lib/, not duplicated under templates/, so there is only
+      // ever one copy of the display math in this repo.
+      "lib/scroll-math.mjs",
+      "lib/scroll-math.d.ts",
     ]) {
       assert.ok(existsSync(join(dir, f)), `expected ${f} to exist`);
     }
