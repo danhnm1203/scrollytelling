@@ -1,11 +1,42 @@
+<div align="center">
+
 # scrollytelling
 
-Turn a video into a scroll-scrubbed landing page. The clip advances frame by
-frame as the visitor scrolls, with copy fading in over it.
+**Turn a video into a scroll-scrubbed landing page.**
+
+The clip advances frame by frame as the visitor scrolls, with copy fading in over
+it. Every frame is measured while it is encoded, so the page has no visible seams
+on any footage.
+
+[![test](https://github.com/danhnm1203/scrollytelling/actions/workflows/test.yml/badge.svg)](https://github.com/danhnm1203/scrollytelling/actions/workflows/test.yml)
+[![node](https://img.shields.io/badge/node-%E2%89%A520-3c873a)](https://nodejs.org)
+[![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
 No accounts, no API keys, nothing to install system-wide.
 
-## Install
+</div>
+
+---
+
+## Contents
+
+- [Requirements](#requirements)
+- [Installation](#installation)
+- [Quickstart](#quickstart)
+- [Why it looks right](#why-it-looks-right)
+- [CLI reference](#cli-reference)
+- [What you get](#what-you-get)
+- [Frames are committed to git](#frames-are-committed-to-git)
+- [Development](#development)
+- [Contributing](#contributing)
+- [License](#license)
+
+## Requirements
+
+Node 20 or newer. Nothing else: `sharp` and `ffmpeg-static` come with this
+package and bring their own binaries.
+
+## Installation
 
 Not on npm yet, so both forms point at GitHub. Drop the `github:` prefix once it
 is published.
@@ -17,9 +48,6 @@ npx github:danhnm1203/scrollytelling <command>
 # Or install it, if you will use it more than once
 npm i -g github:danhnm1203/scrollytelling
 ```
-
-Node 20 or newer. Nothing else to install: `sharp` and `ffmpeg-static` come with
-it and bring their own binaries.
 
 ### Using it from a coding agent
 
@@ -36,8 +64,8 @@ Codex and other agents:
 npx skills add danhnm1203/scrollytelling
 ```
 
-Or clone and copy `skills/scrollytelling` into `~/.claude/skills/`. Either
-way, start a new session and call it as `/scrollytelling`.
+Or clone and copy `skills/scrollytelling` into `~/.claude/skills/`. Either way,
+start a new session and call it as `/scrollytelling`.
 
 ## Quickstart
 
@@ -83,7 +111,7 @@ picks whichever suits the screen. A 16:9 frame cannot fill a 9:19.5 phone withou
 cropping most of its width, so without this a phone shows a strip surrounded by
 background.
 
-## Commands
+## CLI reference
 
 ```
 scrollytelling scaffold <project_dir> [--force] [--diff]
@@ -92,15 +120,24 @@ scrollytelling frames --preview <video>
 scrollytelling frames --check <project_dir>
 ```
 
-| Option | Default | |
+### `frames` options
+
+| Option | Default | Description |
 | --- | --- | --- |
-| `--frames <n>` | 50 | frames in the sequence |
-| `--max-width <px>` | 1280 | longest edge of the encoded webp |
-| `--quality <n>` | 82 | webp quality |
-| `--focus <0-1>` | 0.5 | where the portrait crop sits horizontally |
-| `--skip-portrait` | off | build only the landscape sequence |
+| `--frames <n>` | `50` | Frames in the sequence |
+| `--max-width <px>` | `1280` | Longest edge of the encoded webp |
+| `--quality <n>` | `82` | webp quality |
+| `--focus <0-1>` | `0.5` | Where the portrait crop sits horizontally |
+| `--skip-portrait` | off | Build only the landscape sequence |
 
 Input can be a video or a directory of ordered stills.
+
+### `scaffold` options
+
+| Option | Description |
+| --- | --- |
+| `--force` | Overwrite files you have edited |
+| `--diff` | Report template changes since you scaffolded — see below |
 
 ## What you get
 
@@ -157,11 +194,6 @@ that gets heavy, squash before publishing:
 git reset --soft <commit-before-the-frame-churn> && git commit -m "frames: final sequence"
 ```
 
-## Requirements
-
-Node 20 or newer. `sharp` and `ffmpeg-static` come with this package and bring
-their own binaries.
-
 ## Development
 
 ```bash
@@ -178,6 +210,19 @@ the tested version to drift from the shipped one.
 pixel values, and resampling and encoding behaviour shifts on a minor bump.
 Upgrading is deliberate work that includes refreshing the expected values.
 
+## Contributing
+
+Issues and pull requests are welcome. Before opening a PR:
+
+1. `npm test` passes on Node 20 and 22 — CI runs both.
+2. Changes to `lib/scroll-math.mjs` keep its copy in `templates/` byte-identical;
+   a parity test enforces this.
+3. Deliberately deferred work is listed in [TODOS.md](TODOS.md) — check there
+   before proposing something large.
+
+The design document is
+[docs/superpowers/specs/2026-08-04-scrollytelling-design.md](docs/superpowers/specs/2026-08-04-scrollytelling-design.md).
+
 ## License
 
-MIT
+[MIT](LICENSE)
