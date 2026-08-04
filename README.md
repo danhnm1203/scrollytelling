@@ -1,4 +1,4 @@
-# open-scrolltelling
+# Scrolltelling
 
 Turn a video into a scroll-scrubbed landing page. The clip advances frame by
 frame as the visitor scrolls, with copy fading in over it.
