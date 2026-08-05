@@ -58,6 +58,8 @@ const RENAMES = new Map([["gitignore.template", ".gitignore"]]);
 const EXTRA_FILES = [
   ["../lib/scroll-math.mjs", "lib/scroll-math.mjs"],
   ["../lib/scroll-math.d.ts", "lib/scroll-math.d.ts"],
+  ["../lib/scroll-engine-state.mjs", "lib/scroll-engine-state.mjs"],
+  ["../lib/scroll-engine-state.d.ts", "lib/scroll-engine-state.d.ts"],
 ];
 
 class ScaffoldError extends Error {}

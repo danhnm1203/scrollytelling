@@ -33,6 +33,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { SEQUENCES, framePath, type Sequence } from "@/components/frames";
 import { story, type Beat } from "@/components/story";
+import { decodeStrategy, framesToRetry } from "@/lib/scroll-engine-state";
 import {
   computeScale,
   damp,
@@ -198,6 +199,9 @@ export function ScrollSequence() {
 
     const worker = makeWorker();
     let settledInitial = 0;
+    // A worker can die after it was successfully constructed — see makeWorker.
+    // Once it has, every later request goes to the main thread instead.
+    let workerFailed = false;
 
     const arrived = (index: number, bitmap: ImageBitmap | HTMLImageElement | null) => {
       if (token !== tokenRef.current) {
@@ -223,24 +227,30 @@ export function ScrollSequence() {
       scheduleDrawRef.current?.();
     };
 
-    const request = (index: number) => {
-      if (frames.has(index) || pending.has(index) || failed.has(index)) return;
-      pending.add(index);
-      const url = framePath(sequence.id, index);
-
-      if (worker) {
-        worker.postMessage({ index, url, token });
-        return;
-      }
-      // No worker: decode on the main thread. img.decode() still keeps the work
-      // off the paint path, it just cannot be moved off the thread entirely.
+    // Decode here rather than in the worker. img.decode() still keeps the work
+    // off the paint path, it just cannot be moved off the thread entirely.
+    //
+    // Separate from request() because the worker-failure path calls it for
+    // frames that are already pending, which request() would skip.
+    const decodeOnMainThread = (index: number) => {
       const img = new Image();
       img.decoding = "async";
-      img.src = url;
+      img.src = framePath(sequence.id, index);
       img
         .decode()
         .then(() => arrived(index, img))
         .catch(() => arrived(index, null));
+    };
+
+    const request = (index: number) => {
+      if (frames.has(index) || pending.has(index) || failed.has(index)) return;
+      pending.add(index);
+
+      if (decodeStrategy({ canUseWorker: Boolean(worker), workerFailed }) === "worker") {
+        worker!.postMessage({ index, url: framePath(sequence.id, index), token });
+        return;
+      }
+      decodeOnMainThread(index);
     };
 
     if (worker) {
@@ -251,6 +261,38 @@ export function ScrollSequence() {
           return;
         }
         arrived(index, bitmap ?? null);
+      };
+
+      // A worker that fails to load still constructs. The browser hands back a
+      // valid Worker and reports the failure here, asynchronously, so the
+      // try/catch in makeWorker never sees it.
+      //
+      // Without this the page does not degrade — it stops. Every frame already
+      // posted is waiting on a worker that will not answer, nothing clears them
+      // from `pending`, `arrived` never runs, and the load state stays at a
+      // percentage for as long as the visitor is willing to look at it.
+      worker.onerror = (event) => {
+        if (workerFailed || token !== tokenRef.current) return;
+        workerFailed = true;
+
+        // Naming the URL is the whole point of this warning: it turns "the page
+        // just sits there" into a one-line fix. The usual cause is the bundler
+        // not emitting the worker as its own chunk, and the URL is what shows
+        // that. `event.message` is routinely empty for a failed load, so it is
+        // the extra detail here rather than the message itself.
+        const url = (event instanceof ErrorEvent && event.filename) || String(WORKER_URL);
+        const reason = event instanceof ErrorEvent && event.message ? ` (${event.message})` : "";
+        console.warn(
+          `[scrollytelling] the decode worker at ${url} failed to load${reason}.\n` +
+            `Sequence "${sequence.id}" will decode on the main thread instead — ` +
+            "scrubbing may stutter.\n" +
+            "Usually this means the bundler did not emit the worker chunk.",
+        );
+
+        worker.terminate();
+        for (const index of framesToRetry({ pending, held: frames.keys(), failed })) {
+          decodeOnMainThread(index);
+        }
       };
     }
 
@@ -266,6 +308,16 @@ export function ScrollSequence() {
       }
     };
 
+    // Load-bearing that this runs synchronously, here, before the effect
+    // returns. `onerror` above can only fire on a later tick, so by the time it
+    // does, `pending` already holds the opening window — which is what gives it
+    // something to hand to the main thread, and what stops the load state
+    // sitting at "loading" with no decode in flight.
+    //
+    // Make this first request lazy and that guarantee goes with it, silently:
+    // the worker dies with nothing pending, nothing is retried, and the page is
+    // back to waiting forever. If this has to move, the retry needs to cover
+    // the opening window explicitly instead of inferring it from `pending`.
     ensureWindowRef.current(0);
 
     return () => {
@@ -587,10 +639,12 @@ function NoFrames({ reason }: Readonly<{ reason: "empty" | "failed" }>) {
  * what lets the bundler find the worker and emit it as its own chunk. A plain
  * string path silently ships nothing.
  */
+const WORKER_URL = new URL("./decoder.worker.js", import.meta.url);
+
 function makeWorker(): Worker | null {
   if (typeof Worker === "undefined" || typeof createImageBitmap === "undefined") return null;
   try {
-    return new Worker(new URL("./decoder.worker.js", import.meta.url), { type: "module" });
+    return new Worker(WORKER_URL, { type: "module" });
   } catch {
     return null;
   }

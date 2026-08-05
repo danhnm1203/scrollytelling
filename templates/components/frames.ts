@@ -21,8 +21,17 @@ export const LUMA_ROWS = 4;
 /**
  * Ordered by preference. The page picks whichever sequence best matches the
  * viewport; empty means no footage has been processed yet.
+ *
+ * Annotated rather than `as const satisfies`, which is what the generated file
+ * uses. An empty `as const` array is the tuple type `readonly []`, and indexing
+ * a zero-length tuple is a type error — so `SEQUENCES[0]`, which every consumer
+ * does, would not compile until the first sequence existed. That is precisely
+ * the window a freshly scaffolded project sits in.
+ *
+ * The generated file keeps `as const satisfies` because by then the array has
+ * entries and the extra precision is free.
  */
-export const SEQUENCES = [] as const satisfies readonly Sequence[];
+export const SEQUENCES: readonly Sequence[] = [];
 
 export function framePath(sequenceId: string, index: number): string {
   return `/frames/${sequenceId}_${index}.webp`;

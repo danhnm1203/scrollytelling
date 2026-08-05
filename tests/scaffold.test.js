@@ -82,6 +82,10 @@ describe("scaffold", () => {
       // ever one copy of the display math in this repo.
       "lib/scroll-math.mjs",
       "lib/scroll-math.d.ts",
+      // Same rule for the decisions the scrubbing engine makes. The component
+      // imports these, so a project without them does not build.
+      "lib/scroll-engine-state.mjs",
+      "lib/scroll-engine-state.d.ts",
     ]) {
       assert.ok(existsSync(join(dir, f)), `expected ${f} to exist`);
     }
@@ -168,6 +172,48 @@ describe("scaffold", () => {
     // promote it from screen-reader-only to the page itself.
     assert.match(page, /story-outline/);
     assert.match(css, /\.story-outline/);
+  });
+
+  it("wires the decode worker to a failure handler", async () => {
+    // The decision of what to do when the worker dies is unit-tested in
+    // decode-strategy.test.js. What that cannot see is whether the component
+    // ever asks. A worker that 404s constructs successfully and reports
+    // asynchronously, so without this handler the page waits forever on frames
+    // that are never coming — silently, which the project does not allow.
+    const dir = join(tempDir(), "site");
+    await runCapturing([dir]);
+
+    const sequence = readFileSync(join(dir, "components/ScrollSequence.tsx"), "utf8");
+
+    // Both spellings, so moving to addEventListener during the engine
+    // extraction is a refactor rather than a false failure.
+    const handler = /worker\.onerror|addEventListener\(\s*["']error["']/;
+    assert.match(sequence, handler, "the worker needs a failure handler");
+
+    // An empty handler satisfies the line above and fixes nothing. What makes
+    // it a fallback is recovering the frames that were in flight, so require
+    // that inside the handler rather than merely somewhere in the file.
+    //
+    // Bounded by the next statement after the worker block rather than a
+    // character count, which would break every time the warning text grew. If
+    // that marker ever moves the slice runs to end of file, which still rules
+    // out the case that matters: the import sits above the handler, so a
+    // forward slice can never be satisfied by it alone.
+    const from = sequence.search(handler);
+    const to = sequence.indexOf("ensureWindowRef.current =", from);
+    const body = sequence.slice(from, to === -1 ? undefined : to);
+
+    assert.match(
+      body,
+      /framesToRetry/,
+      "the failure handler must re-request the frames abandoned with the worker",
+    );
+
+    // Asserted against the handler, not the file. There is a second
+    // console.warn further down for failed frames, so a file-wide check would
+    // pass with this warning deleted — which is the whole diagnostic gone.
+    assert.match(body, /console\.warn/, "a silent fallback is the bug, not the fix");
+    assert.match(body, /WORKER_URL|filename/, "the warning has to say which URL failed");
   });
 
   it("leaves an edited file untouched and says which files it skipped", async () => {
