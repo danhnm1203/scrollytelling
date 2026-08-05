@@ -6,8 +6,15 @@
  * hands back an ImageBitmap, transferred rather than copied, so the main thread
  * only ever draws.
  *
- *   main ──{ decode, index, url }──▶ worker ──▶ fetch ──▶ createImageBitmap
- *        ◀─{ index, bitmap }────────                        (transferred)
+ *   main ──{ index, url, token }──▶ worker ──▶ fetch ──▶ createImageBitmap
+ *        ◀─{ index, token, bitmap }──                        (transferred)
+ *        ◀─{ index, token, error  }──   fetch or decode failed
+ *        ◀─ onerror ─────────────────   this module never loaded at all
+ *
+ * That last edge is the one with teeth. A worker whose URL 404s still
+ * constructs successfully, so the caller cannot detect it at construction time
+ * and has to listen for onerror instead. If it does not, every message it posts
+ * here goes nowhere and the page waits forever.
  *
  * The caller is responsible for calling .close() on every bitmap it stops
  * using. Nothing here can know when that is, and a bitmap nobody closes is
