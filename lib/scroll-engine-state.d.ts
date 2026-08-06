@@ -92,6 +92,16 @@ export declare function nearestDecoded(at: {
   totalFrames: number;
 }): number | null;
 
+/** The exact scrub position while moving, the nearest whole frame once stopped. */
+export declare function settlePosition(step: {
+  drawn: number;
+  exact: number;
+  moving: boolean;
+  seconds: number;
+  deltaMs: number;
+  totalFrames: number;
+}): { drawn: number; settling: boolean };
+
 /** The two frames to composite, and how far between them the position sits. */
 export declare function blendFrames(at: {
   exact: number;

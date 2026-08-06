@@ -19,6 +19,7 @@ import {
   canvasSize,
   drawRect,
   blendFrames,
+  settlePosition,
   nearestDecoded,
   nextEased,
 } from "../lib/scroll-engine-state.mjs";
@@ -35,6 +36,78 @@ const SEQUENCE = {
     [255, 255, 255],
   ],
 };
+
+/**
+ * Resolving to a sharp frame once the scroll stops.
+ *
+ * Blending two frames is what makes motion continuous, and it is also what
+ * leaves a still page showing a double exposure of two frames — on footage
+ * where the camera moves, adjacent frames are far enough apart that a half mix
+ * reads as a ghost rather than as motion blur. Nothing is being smoothed once
+ * the scroll has stopped, so there is nothing to trade away by landing on a
+ * whole frame.
+ */
+describe("settlePosition", () => {
+  const ARGS = { seconds: 0.18, deltaMs: 16, totalFrames: 60 };
+
+  it("tracks the scrub exactly while it is still moving", () => {
+    // No second lag on top of the easing that is already there: the picture
+    // must not trail the position the rest of the page renders from.
+    const step = settlePosition({ drawn: 3.1, exact: 7.4, moving: true, ...ARGS });
+    assert.equal(step.drawn, 7.4);
+    assert.equal(step.settling, false);
+  });
+
+  it("moves toward the nearest whole frame once the scroll stops", () => {
+    const step = settlePosition({ drawn: 12.4, exact: 12.4, moving: false, ...ARGS });
+    assert.ok(step.drawn < 12.4, `expected movement toward 12, got ${step.drawn}`);
+    assert.ok(step.drawn > 12, `must not overshoot the frame, got ${step.drawn}`);
+    assert.equal(step.settling, true);
+  });
+
+  it("rounds rather than always dropping to the frame below", () => {
+    const up = settlePosition({ drawn: 12.6, exact: 12.6, moving: false, ...ARGS });
+    assert.ok(up.drawn > 12.6, `expected movement toward 13, got ${up.drawn}`);
+  });
+
+  it("arrives, so the loop can stop", () => {
+    // Exponential easing never quite reaches its target, so something has to
+    // decide it is close enough — otherwise an idle page schedules frames for
+    // the life of the tab.
+    let drawn = 12.5;
+    let settling = true;
+    let guard = 0;
+    while (settling && guard++ < 600) {
+      const step = settlePosition({ drawn, exact: 12.5, moving: false, ...ARGS });
+      drawn = step.drawn;
+      settling = step.settling;
+    }
+    assert.ok(guard < 600, "never settled");
+    assert.equal(drawn, 13, `landed on ${drawn}, not a whole frame`);
+  });
+
+  it("reports settled immediately when it is already on a frame", () => {
+    const step = settlePosition({ drawn: 9, exact: 9, moving: false, ...ARGS });
+    assert.equal(step.drawn, 9);
+    assert.equal(step.settling, false);
+  });
+
+  it("hands over continuously when the scrub stops", () => {
+    // The first settling paint has to start from where the moving paint left
+    // off. Starting anywhere else is a jump at the exact moment the reader has
+    // stopped and is looking straight at it.
+    const moving = settlePosition({ drawn: 0, exact: 20.5, moving: true, ...ARGS });
+    const first = settlePosition({ drawn: moving.drawn, exact: 20.5, moving: false, ...ARGS });
+    assert.ok(Math.abs(first.drawn - 20.5) < 0.2, `jumped to ${first.drawn}`);
+  });
+
+  it("never leaves the sequence", () => {
+    const last = settlePosition({ drawn: 59, exact: 59, moving: false, ...ARGS });
+    assert.equal(last.drawn, 59);
+    const first = settlePosition({ drawn: 0, exact: 0, moving: false, ...ARGS });
+    assert.equal(first.drawn, 0);
+  });
+});
 
 describe("nextEased", () => {
   it("snaps to the target on the first paint of a run", () => {
