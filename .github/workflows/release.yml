@@ -150,11 +150,24 @@ jobs:
       - name: Take the notes from the changelog
         run: node ci/changelog-notes.mjs "${GITHUB_REF_NAME}" > /tmp/notes.md
 
+      # The title comes from the same heading, because the repository sidebar
+      # renders a release's *name* and nothing else. v0.4.2 was titled with the
+      # bare tag and arrived there saying nothing, next to four hand-titled
+      # releases that read as sentences. A heading with no summary still yields
+      # the tag, so a release is never blocked on one.
+      - name: Take the title from the same heading
+        run: |
+          {
+            echo "RELEASE_TITLE<<EOF"
+            node ci/changelog-notes.mjs --title "${GITHUB_REF_NAME}"
+            echo "EOF"
+          } >> "${GITHUB_ENV}"
+
       - name: Create the release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release create "${GITHUB_REF_NAME}" \
-            --title "${GITHUB_REF_NAME}" \
+            --title "${RELEASE_TITLE}" \
             --notes-file /tmp/notes.md \
             --verify-tag

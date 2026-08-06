@@ -5,7 +5,7 @@ Notable changes to `@danhnm1203/scrollytelling`.
 This file starts at 0.2.0. Earlier releases predate it and are not reconstructed
 here — inventing history is worse than admitting it was not kept.
 
-## 0.4.2
+## 0.4.2 — the skill asks which template
 
 ### Fixed
 
@@ -31,7 +31,7 @@ here — inventing history is worse than admitting it was not kept.
   The `package.json` inside each template stays at 0.1.0 on purpose: that is the
   version of the site somebody scaffolds, not of the tool that scaffolded it.
 
-## 0.4.1
+## 0.4.1 — pages with more than a hero
 
 ### Fixed
 
@@ -78,7 +78,7 @@ by hand. Without it the page keeps scrubbing against the document, which is only
 correct while the hero is the whole page — the engine now says so in the console
 when it happens.
 
-## 0.4.0
+## 0.4.0 — the Nuxt template
 
 ### Added
 
@@ -97,7 +97,7 @@ when it happens.
   Nothing else moved: the engine, the stylesheet, the worker and the frame
   pipeline are the ones the other three templates already use.
 
-## 0.3.0
+## 0.3.0 — three templates, one engine
 
 Three templates instead of one, running the same engine.
 
@@ -155,7 +155,7 @@ Three templates instead of one, running the same engine.
   Vite did not, so an Astro build shipped no worker and fell back to
   main-thread decoding with only a console warning.
 
-## 0.2.0
+## 0.2.0 — two silent failures fixed
 
 Two silent failures fixed, and the runtime's decisions moved somewhere they can
 be tested.
