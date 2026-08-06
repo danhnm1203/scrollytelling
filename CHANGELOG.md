@@ -5,6 +5,25 @@ Notable changes to `@danhnm1203/scrollytelling`.
 This file starts at 0.2.0. Earlier releases predate it and are not reconstructed
 here — inventing history is worse than admitting it was not kept.
 
+## Unreleased
+
+### Added
+
+- **A Nuxt template.** `scrollytelling scaffold ./my-site --template nuxt` —
+  Nuxt 4 with Vue single-file components, server-rendered like the Astro one, so
+  the story outline and the opening frame are in the HTML before any JavaScript
+  runs. The story lives in `app/components/story.js`.
+
+  Two things are specific to Nuxt. `nuxt.config.ts` narrows the component scan
+  to `.vue`, because Nuxt would otherwise register `frames.js` and `story.js` as
+  components — that is what lets them keep the name and place they have on every
+  other template. And `app.vue` disposes the engine on unmount, because Nuxt
+  keeps the page alive across client-side navigation and the scroll listener,
+  animation frame and decoded frames would otherwise outlive the page.
+
+  Nothing else moved: the engine, the stylesheet, the worker and the frame
+  pipeline are the ones the other three templates already use.
+
 ## 0.3.0
 
 Three templates instead of one, running the same engine.
