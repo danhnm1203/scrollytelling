@@ -2,6 +2,11 @@ node_modules/
 *.log
 .DS_Store
 
+# Incremental typecheck output. templates/ has `"incremental": true`, so any
+# editor or CLI that typechecks it drops a .tsbuildinfo there — and templates/
+# is in package.json `files`, so a stray one would ship to every user.
+*.tsbuildinfo
+
 # Scratch output from `frames --preview`
 .preview/
 

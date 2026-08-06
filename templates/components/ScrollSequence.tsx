@@ -33,11 +33,16 @@ import { useEffect, useRef, useState } from "react";
 
 import { SEQUENCES, framePath, type Sequence } from "@/components/frames";
 import { story, type Beat } from "@/components/story";
-import { decodeStrategy, framesToRetry } from "@/lib/scroll-engine-state";
+import {
+  decodeStrategy,
+  framesToRetry,
+  loadStateAfter,
+  windowDiff,
+  type LoadState,
+} from "@/lib/scroll-engine-state";
 import {
   computeScale,
   damp,
-  decodeWindow,
   fadeOpacity,
   framesInBudget,
   frameIndex,
@@ -84,10 +89,6 @@ const SCRUB_SECONDS = 0.35;
  */
 const DECODE_BUDGET_BYTES = 96 * 1024 * 1024;
 
-type LoadState =
-  | { status: "loading"; done: number; total: number }
-  | { status: "ready"; failed: number[] }
-  | { status: "failed" };
 
 /**
  * Whether the visitor has asked their system for reduced motion.
@@ -137,7 +138,7 @@ export function ScrollSequence() {
   // scripting disabled would see.
   const [sequence, setSequence] = useState<Sequence | null>(SEQUENCES[0] ?? null);
   const [load, setLoad] = useState<LoadState>({
-    status: "loading",
+    phase: "loading",
     done: 0,
     total: SEQUENCES[0]?.totalFrames ?? 0,
   });
@@ -195,7 +196,7 @@ export function ScrollSequence() {
 
     const capacity = framesInBudget(DECODE_BUDGET_BYTES, sequence.width, sequence.height);
     const initial = Math.min(sequence.totalFrames, Math.max(1, Math.ceil(capacity / 2)));
-    setLoad({ status: "loading", done: 0, total: initial });
+    setLoad({ phase: "loading", done: 0, total: initial });
 
     const worker = makeWorker();
     let settledInitial = 0;
@@ -213,25 +214,27 @@ export function ScrollSequence() {
       if (bitmap) frames.set(index, bitmap);
       else failed.add(index);
 
-      if (index < initial) {
-        settledInitial++;
-        if (settledInitial < initial) {
-          setLoad({ status: "loading", done: settledInitial, total: initial });
-        } else if (failed.size >= initial) {
-          setLoad({ status: "failed" });
-        } else {
-          if (failed.size > 0) warnFailed(failed);
-          setLoad({ status: "ready", failed: [...failed] });
-        }
+      if (index < initial) settledInitial++;
+
+      // Hand it every failure and let it narrow to the opening window. Keeping
+      // a second set here and picking between them is the version of this that
+      // goes quietly wrong.
+      const next = loadStateAfter({ index, initial, settled: settledInitial, failed });
+      if (next) {
+        // Warn about every frame that has failed, not only the opening ones —
+        // the visitor sees the gap wherever it is.
+        if (next.phase === "ready" && failed.size > 0) warnFailed(failed);
+        setLoad(next);
       }
+
       scheduleDrawRef.current?.();
     };
 
     // Decode here rather than in the worker. img.decode() still keeps the work
     // off the paint path, it just cannot be moved off the thread entirely.
     //
-    // Separate from request() because the worker-failure path calls it for
-    // frames that are already pending, which request() would skip.
+    // Separate from requestFrame because the worker-failure path calls it for
+    // frames that are already pending, which would otherwise be double-counted.
     const decodeOnMainThread = (index: number) => {
       const img = new Image();
       img.decoding = "async";
@@ -242,8 +245,10 @@ export function ScrollSequence() {
         .catch(() => arrived(index, null));
     };
 
-    const request = (index: number) => {
-      if (frames.has(index) || pending.has(index) || failed.has(index)) return;
+    // Unconditional: windowDiff has already excluded anything held, in flight,
+    // or known broken. Filtering again here would put that rule in two places
+    // and let them disagree.
+    const requestFrame = (index: number) => {
       pending.add(index);
 
       if (decodeStrategy({ canUseWorker: Boolean(worker), workerFailed }) === "worker") {
@@ -298,13 +303,21 @@ export function ScrollSequence() {
 
     // Called from the draw loop: keep the window populated, release the rest.
     ensureWindowRef.current = (centre: number) => {
-      const w = decodeWindow(centre, sequence.totalFrames, capacity);
-      for (let i = w.from; i <= w.to; i++) request(i);
-      for (const [index, bitmap] of frames) {
-        if (index < w.from || index > w.to) {
-          if ("close" in bitmap) bitmap.close();
-          frames.delete(index);
-        }
+      const { request, release } = windowDiff({
+        centre,
+        totalFrames: sequence.totalFrames,
+        capacity,
+        held: frames.keys(),
+        pending,
+        failed,
+      });
+
+      for (const index of request) requestFrame(index);
+
+      for (const index of release) {
+        const bitmap = frames.get(index);
+        if (bitmap && "close" in bitmap) bitmap.close();
+        frames.delete(index);
       }
     };
 
@@ -330,7 +343,7 @@ export function ScrollSequence() {
   // Draw. One draw per animation frame at most: scrolling fires far more often
   // than the screen refreshes, and drawing per event just queues work.
   useEffect(() => {
-    if (!sequence || reducedMotion || load.status !== "ready") return;
+    if (!sequence || reducedMotion || load.phase !== "ready") return;
 
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -433,13 +446,13 @@ export function ScrollSequence() {
       rafRef.current = 0;
       scheduleDrawRef.current = null;
     };
-  }, [sequence, reducedMotion, load.status]);
+  }, [sequence, reducedMotion, load.phase]);
 
   if (!sequence) return <NoFrames reason="empty" />;
   if (reducedMotion) return <StillHero sequence={sequence} />;
-  if (load.status === "failed") return <NoFrames reason="failed" />;
+  if (load.phase === "failed") return <NoFrames reason="failed" />;
 
-  const ready = load.status === "ready";
+  const ready = load.phase === "ready";
 
   return (
     <div aria-hidden style={{ height: `${scrollHeightVh(sequence.totalFrames)}vh` }}>
