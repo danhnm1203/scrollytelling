@@ -3,17 +3,38 @@ name: release
 # Publishing is driven by a tag, so the version that ships is always a version
 # that exists in git history. A manual `npm publish` from a laptop is how
 # packages end up shipping uncommitted work.
+#
+# The same tarball goes to two registries. npmjs.com is the one users install
+# from; GitHub Packages exists so the repository's own Packages panel reflects
+# what has shipped. They are separate jobs rather than one, so that a failure in
+# the second can be re-run on its own — `gh run rerun --failed`. Combined, a
+# retry would attempt to republish a version npm has already accepted, and npm
+# refuses that.
 on:
   push:
     tags: ["v*"]
 
+  # Lets an already-tagged version be pushed to GitHub Packages without
+  # re-releasing it to npm. Needed once to backfill anything tagged before this
+  # job existed, and useful whenever only the second registry fails.
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Tag to publish to GitHub Packages (e.g. v0.2.0)"
+        required: true
+
 permissions:
   contents: read
-  id-token: write
 
 jobs:
-  publish:
+  npm:
+    # Only on a real tag push. A manual run is for backfilling the GitHub
+    # Packages side, and npm will not accept a version it already has.
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # provenance
     steps:
       - uses: actions/checkout@v4
 
@@ -40,3 +61,37 @@ jobs:
       - run: npm publish --provenance --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  github-packages:
+    needs: [npm]
+    # Runs after a successful npm publish, or on its own when dispatched by
+    # hand. `always()` is what lets the second case through, since `needs` is
+    # otherwise skipped when the job it depends on did not run.
+    if: |
+      always() &&
+      (needs.npm.result == 'success' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://npm.pkg.github.com
+
+      # Deliberately no `npm ci`. With the registry pointed at GitHub Packages
+      # an install would try to resolve next, react and the rest from there and
+      # fail. `npm publish` packs straight from the working tree, and this
+      # package has no prepublish script that would need dependencies.
+      #
+      # No --provenance either: that is attested against npmjs.com, and the npm
+      # job above already produces it. This is the same tarball, published a
+      # second time so the repository's Packages panel is not empty.
+      - run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
