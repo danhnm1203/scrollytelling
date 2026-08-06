@@ -1,6 +1,6 @@
 ---
 name: scrollytelling
-description: Turn a video (or an ordered image folder) into a scroll-scrubbed Next.js landing page — the clip advances frame by frame as the visitor scrolls, with copy beats fading in over it. Use for a scrollytelling hero, a scroll-linked product reveal, an "Apple-style" scroll animation, a scroll-linked image sequence, or to turn footage into a landing page.
+description: Turn a video (or an ordered image folder) into a scroll-scrubbed landing page — Next.js, Nuxt, Astro or plain HTML, asked for at the start — where the clip advances frame by frame as the visitor scrolls, with copy beats fading in over it. Use for a scrollytelling hero, a scroll-linked product reveal, an "Apple-style" scroll animation, a scroll-linked image sequence, or to turn footage into a landing page.
 argument-hint: "[video-or-image-dir] [project-dir]"
 license: MIT
 metadata:
@@ -74,30 +74,43 @@ Start a new session and it is available as **`/scrollytelling`**.
 2. **Read those frames** and propose copy beats from what is actually on screen.
    Place beats against the footage, not on round numbers — `0.30 / 0.60 / 0.90` are
    placeholders.
-3. **Agree the page before building it.** One short design doc: the page flow, the
+3. **Ask which template, before agreeing anything else.** Do not assume `next`
+   because it is the default — four exist, and the choice decides which files
+   every step after this one touches, so it is expensive to change later. Ask it
+   as a question with the trade-off attached, and only skip asking when the user
+   already named a framework or the project directory already has one:
+
+   | Template | Pick it when |
+   | --- | --- |
+   | `next` | Next.js App Router with Tailwind — the default when nothing argues otherwise |
+   | `nuxt` | the surrounding project is Vue |
+   | `astro` | a content site that should ship no JavaScript beyond the engine |
+   | `html` | the page has to work with no build step and no dependencies at all |
+
+4. **Agree the page before building it.** One short design doc: the page flow, the
    visual language, and what each beat says. The scrubber is a hero, not a whole
    page — see "The page below the hero".
-4. `scrollytelling scaffold <project_dir> [--template <name>]` — `next` is the
-   default. `nuxt`, `astro` and `html` also exist; `--template` with no name
-   lists them. Pick `html` when the page has to work with no build step at all.
-5. `cd <project_dir> && npm install` — only next/react/react-dom, so it is fast.
+5. `scrollytelling scaffold <project_dir> --template <name>` — pass the answer
+   from step 3 explicitly, even when it is `next`, so the project records the
+   choice rather than inheriting a default. `--template` with no name lists them.
+6. `cd <project_dir> && npm install` — only next/react/react-dom, so it is fast.
    The `html` template skips this entirely: there is nothing to install.
-6. `scrollytelling frames <video> <project_dir> --frames 50 [--focus 0.5]`
+7. `scrollytelling frames <video> <project_dir> --frames 50 [--focus 0.5]`
    — read the luminance table it prints. `--focus` is where the portrait crop sits
    horizontally, 0 to 1; the subject is not always centred.
-7. Edit the story file — `components/story.js` on `next` and `html`,
+8. Edit the story file — `components/story.js` on `next` and `html`,
    `app/components/story.js` on `nuxt`, `src/components/story.js` on `astro`.
    It is plain JavaScript with its types
    in a sibling `.d.ts`, so your editor still catches a mistyped `align` and so
    does the build.
-8. `scrollytelling frames --check <project_dir>` — per-beat readability warnings.
-9. Build the rest of the page.
-10. Build and serve it. `npm run build && npm run start -- -p 3737` on `next`,
+9. `scrollytelling frames --check <project_dir>` — per-beat readability warnings.
+10. Build the rest of the page.
+11. Build and serve it. `npm run build && npm run start -- -p 3737` on `next`,
     `npm run build && npm run preview` on `nuxt` and `astro`, and any static
     server on `html` — module scripts and workers are same-origin, so `file://`
     will not work there.
-11. **Measurement checkpoint** (below).
-12. Verify, then report.
+12. **Measurement checkpoint** (below).
+13. Verify, then report.
 
 Two sequences are built from one clip: the source as shot, and a portrait crop, so
 a phone gets a composition framed for a phone. `--skip-portrait` opts out of the
