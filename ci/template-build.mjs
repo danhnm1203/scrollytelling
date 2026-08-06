@@ -55,6 +55,16 @@ export const BUILD_PLANS = {
     outDir: "dist",
     alsoSearch: [],
   },
+  nuxt: {
+    install: ["npm", "install", "--no-audit", "--no-fund"],
+    build: ["npm", "run", "build"],
+    // Nuxt splits its output: .output/public/ is what a browser is served and
+    // .output/server/ is the node server that serves it. One recursive walk of
+    // .output covers both, so there is nothing extra to search — the worker,
+    // the stylesheet and the frames all land under public/.
+    outDir: ".output",
+    alsoSearch: [],
+  },
   html: {
     // The whole claim of this template is that there is nothing to install and
     // nothing to run. Giving it a build command would verify a different

@@ -56,7 +56,7 @@ describe("the build plans", () => {
   });
 
   it("builds the templates that have a bundler", () => {
-    for (const name of ["next", "astro"]) {
+    for (const name of ["next", "nuxt", "astro"]) {
       assert.ok(Array.isArray(BUILD_PLANS[name].build), `${name} must build`);
       assert.ok(Array.isArray(BUILD_PLANS[name].install), `${name} must install`);
     }

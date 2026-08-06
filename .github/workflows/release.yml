@@ -40,7 +40,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        template: [next, astro, html]
+        template: [next, nuxt, astro, html]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
