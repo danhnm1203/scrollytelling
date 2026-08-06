@@ -5,7 +5,7 @@ Notable changes to `@danhnm1203/scrollytelling`.
 This file starts at 0.2.0. Earlier releases predate it and are not reconstructed
 here — inventing history is worse than admitting it was not kept.
 
-## Unreleased
+## 0.4.1
 
 ### Fixed
 
@@ -41,6 +41,16 @@ Also: under reduced motion the runway now collapses. A server-rendered template
 sizes it before it can know the setting, which left a reduced-motion visitor
 with the story as prose followed by several screens of dead scroll under a stuck
 image.
+
+**Existing projects:** these fixes are in the engine your project carries a copy
+of, so re-run `scrollytelling scaffold .` to take them —
+`scrollytelling scaffold . --diff` reports what moved, and neither overwrites a
+file you have edited. That last part matters here: the page markup gained
+`data-scrollytelling-runway` on the element the hero sticks inside, and if you
+have edited that file, adding the attribute is the one change you have to make
+by hand. Without it the page keeps scrubbing against the document, which is only
+correct while the hero is the whole page — the engine now says so in the console
+when it happens.
 
 ## 0.4.0
 
