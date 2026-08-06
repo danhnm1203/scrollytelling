@@ -92,6 +92,13 @@ export declare function nearestDecoded(at: {
   totalFrames: number;
 }): number | null;
 
+/** The two frames to composite, and how far between them the position sits. */
+export declare function blendFrames(at: {
+  exact: number;
+  held: Iterable<number>;
+  totalFrames: number;
+}): { base: number | null; next: number | null; mix: number };
+
 /** Which frames to fetch, and which decoded frames to release. */
 export declare function windowDiff(state: {
   centre: number;

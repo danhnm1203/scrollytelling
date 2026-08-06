@@ -68,8 +68,43 @@ describe("fadeOpacity", () => {
 
   it("fades rather than jumping", () => {
     const mid = (0.3 + 0.6) / 2;
-    const partial = fadeOpacity(BEATS, 1, (0.3 + mid) / 2);
+    const partial = fadeOpacity(BEATS, 1, mid);
     assert.ok(partial > 0 && partial < 1, `expected a partial fade, got ${partial}`);
+  });
+
+  it("holds a beat at full opacity for a stretch either side of its position", () => {
+    // The complaint this answers: a linear ramp all the way to the neighbour
+    // means a beat is at full strength for one instant and dimmed everywhere
+    // else, so the copy reads as permanently washed out.
+    assert.equal(fadeOpacity(BEATS, 1, 0.32), 1, "just after its own position");
+    assert.equal(fadeOpacity(BEATS, 1, 0.28), 1, "just before its own position");
+    assert.equal(fadeOpacity(BEATS, 2, 0.32), 0, "the next beat has not started");
+  });
+
+  it("spends only a short stretch with neither beat clearly winning", () => {
+    // Both beats half-lit is the state that reads as broken. It cannot be
+    // removed — two opacities summing to 1 must cross at 0.5 — so what matters
+    // is how much of the scroll is spent there.
+    let muddy = 0;
+    let samples = 0;
+    for (let p = 0.3; p <= 0.6001; p += 0.002) {
+      const a = fadeOpacity(BEATS, 1, p);
+      const b = fadeOpacity(BEATS, 2, p);
+      if (a > 0.15 && a < 0.85 && b > 0.15 && b < 0.85) muddy++;
+      samples++;
+    }
+    const fraction = muddy / samples;
+    assert.ok(fraction < 0.3, `${(fraction * 100).toFixed(0)}% of the gap had both beats dim`);
+  });
+
+  it("never steps: the fade is continuous across the whole handoff", () => {
+    // A hold band bounded by an abrupt edge would trade a wash for a flicker.
+    let previous = fadeOpacity(BEATS, 1, 0.3);
+    for (let p = 0.3; p <= 0.6001; p += 0.002) {
+      const here = fadeOpacity(BEATS, 1, p);
+      assert.ok(Math.abs(here - previous) < 0.05, `jumped from ${previous} to ${here} at ${p}`);
+      previous = here;
+    }
   });
 
   it("never leaves the page with nothing visible", () => {

@@ -18,6 +18,7 @@ import {
   backgroundColor,
   canvasSize,
   drawRect,
+  blendFrames,
   nearestDecoded,
   nextEased,
 } from "../lib/scroll-engine-state.mjs";
@@ -185,6 +186,85 @@ describe("drawRect", () => {
     const rect = drawRect({ viewportWidth: 900, viewportHeight: 1600, sequence: SEQUENCE });
     const sourceAspect = SEQUENCE.width / SEQUENCE.height;
     assert.ok(Math.abs(rect.width / rect.height - sourceAspect) < 1e-9);
+  });
+});
+
+/**
+ * What to paint so a coarse sequence does not step.
+ *
+ * 50 frames over 400vh is one frame every 8vh: a single flick crosses several,
+ * and drawing only the nearest makes the footage advance in visible jumps no
+ * amount of easing can hide, because the easing moves between the same discrete
+ * images. Drawing the frame below and the frame above, the second at the
+ * fractional part, turns the same 50 files into continuous motion.
+ */
+describe("blendFrames", () => {
+  const held = [0, 1, 2, 3, 4, 5];
+
+  it("mixes the two frames the position sits between", () => {
+    const blend = blendFrames({ exact: 2.25, held, totalFrames: 10 });
+    assert.equal(blend.base, 2);
+    assert.equal(blend.next, 3);
+    assert.ok(Math.abs(blend.mix - 0.25) < 1e-9, `mix was ${blend.mix}`);
+  });
+
+  it("draws one frame, not two, when the position lands on a frame", () => {
+    // A second drawImage at zero alpha is a wasted composite on every paint.
+    const blend = blendFrames({ exact: 3, held, totalFrames: 10 });
+    assert.equal(blend.base, 3);
+    assert.equal(blend.next, null);
+    assert.equal(blend.mix, 0);
+  });
+
+  it("sweeps mix from 0 to 1 across one frame's worth of scroll", () => {
+    const low = blendFrames({ exact: 2.05, held, totalFrames: 10 });
+    const high = blendFrames({ exact: 2.95, held, totalFrames: 10 });
+    assert.ok(low.mix < 0.1 && high.mix > 0.9, `${low.mix} then ${high.mix}`);
+    assert.equal(low.next, 3);
+    assert.equal(high.next, 3);
+  });
+
+  it("holds the base still rather than blending toward a frame that is not there", () => {
+    // Half of a missing frame is not half a transition, it is a flash of the
+    // wrong image. Better to show one frame late than two frames wrong.
+    const blend = blendFrames({ exact: 2.5, held: [2], totalFrames: 10 });
+    assert.equal(blend.base, 2);
+    assert.equal(blend.next, null);
+    assert.equal(blend.mix, 0);
+  });
+
+  it("does not blend when the base itself is a fallback", () => {
+    // `exact` is nowhere near what is decoded, so the fraction describes a gap
+    // between two frames neither of which is being drawn.
+    const blend = blendFrames({ exact: 8.5, held: [2], totalFrames: 10 });
+    assert.equal(blend.base, 2);
+    assert.equal(blend.next, null);
+    assert.equal(blend.mix, 0);
+  });
+
+  it("never reaches past the last frame", () => {
+    const blend = blendFrames({ exact: 9, held: [8, 9], totalFrames: 10 });
+    assert.equal(blend.base, 9);
+    assert.equal(blend.next, null);
+  });
+
+  it("returns nothing to draw when nothing is decoded", () => {
+    assert.equal(blendFrames({ exact: 5, held: [], totalFrames: 10 }).base, null);
+  });
+
+  it("survives a position outside the sequence, the way rubber-band scroll gives", () => {
+    for (const exact of [-3, -0.5, 12.5]) {
+      const blend = blendFrames({ exact, held, totalFrames: 10 });
+      assert.ok(blend.mix >= 0 && blend.mix <= 1, `mix ${blend.mix} at ${exact}`);
+    }
+  });
+
+  it("accepts a Map's keys, which is what the caller holds", () => {
+    const map = new Map([
+      [2, "a"],
+      [3, "b"],
+    ]);
+    assert.equal(blendFrames({ exact: 2.5, held: map.keys(), totalFrames: 10 }).next, 3);
   });
 });
 
