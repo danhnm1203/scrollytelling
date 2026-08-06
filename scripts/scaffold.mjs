@@ -189,18 +189,24 @@ export async function run(positionals, flags = {}) {
 }
 
 function scaffold(positionals, flags) {
-  // `--template` with no value lists rather than erroring: the question it is
-  // usually asked in is "what are my options".
+  const [projectDir] = positionals;
+
+  // `--template` with no value is a question when nothing else was asked for,
+  // and a mistake when a directory was. Listing in the second case would print
+  // the templates and quietly not scaffold — the caller asked for a project and
+  // would get an exit code of 0 and no project.
   if (flags.template === null) {
     const width = Math.max(...templateNames().map((n) => n.length));
-    const lines = templateNames().map(
-      (n) => `  ${n.padEnd(width)}  ${TEMPLATES[n].description}`,
-    );
-    process.stdout.write(`Available templates:\n${lines.join("\n")}\n`);
+    const listing = templateNames()
+      .map((n) => `  ${n.padEnd(width)}  ${TEMPLATES[n].description}`)
+      .join("\n");
+
+    if (projectDir) {
+      throw new ScaffoldError(`--template needs a name. Available:\n${listing}`);
+    }
+    process.stdout.write(`Available templates:\n${listing}\n`);
     return 0;
   }
-
-  const [projectDir] = positionals;
   if (!projectDir) {
     throw new ScaffoldError("scaffold needs a project directory. Try: scaffold ./my-site");
   }
@@ -222,7 +228,7 @@ function scaffold(positionals, flags) {
   // claims the new one, and every later `frames` run resolves its paths against
   // the wrong layout. Nothing errors, and the page renders empty.
   const existing = readRecord(projectDir);
-  if (existsSync(join(projectDir, VERSION_FILE)) && existing.template !== templateName && !flags.force) {
+  if (existing.version !== null && existing.template !== templateName && !flags.force) {
     throw new ScaffoldError(
       `${projectDir} was generated from the "${existing.template}" template; ` +
         `you asked for "${templateName}".\n` +
@@ -285,9 +291,25 @@ function diff(positionals) {
   }
 
   const record = readRecord(projectDir);
+
   // Compared against the template this project came from, not the default —
   // otherwise every file in an Astro project reads as changed.
-  const current = currentTemplateHashes(record.template);
+  //
+  // A template this build does not know is survivable and must be: the record
+  // is data from another version of this package, and a command that only
+  // reports has no business refusing over it. Say so and compare against the
+  // default rather than going silent about which baseline was used.
+  let current;
+  try {
+    current = currentTemplateHashes(record.template);
+  } catch {
+    process.stdout.write(
+      `This project records the "${record.template}" template, which this ` +
+        `version of scrollytelling does not know about.\n` +
+        `Comparing against "${DEFAULT_TEMPLATE}" instead — upgrade if that looks wrong.\n\n`,
+    );
+    current = currentTemplateHashes(DEFAULT_TEMPLATE);
+  }
   const project = projectHashes(projectDir, [
     ...new Set([...Object.keys(record.files), ...Object.keys(current)]),
   ]);

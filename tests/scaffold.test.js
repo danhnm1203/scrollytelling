@@ -320,7 +320,34 @@ describe("scaffold", () => {
     assert.equal(code, 0, "--force is the escape hatch and must still work");
   });
 
-  it("lists the templates when --template is given no value", async () => {
+  it("refuses rather than silently not scaffolding when --template has no name", async () => {
+    // Listing here would print the templates, exit 0, and leave the caller with
+    // no project — they asked for one and the command said it succeeded.
+    const dir = join(tempDir(), "site");
+    const { code, stderr } = await runCapturing([dir], { template: null });
+
+    assert.notEqual(code, 0, "asking for a project and getting none must not exit 0");
+    assert.ok(!existsSync(dir), "nothing should have been written");
+    assert.match(stderr, /next/, "it should still say what the options are");
+  });
+
+  it("reports rather than refusing when the record names an unknown template", async () => {
+    // --diff only reads. The record is data from another version of this
+    // package, and a report has no business refusing over it.
+    const dir = join(tempDir(), "site");
+    await runCapturing([dir]);
+    writeFileSync(
+      join(dir, ".scrollytelling-version"),
+      `${JSON.stringify({ version: "0", template: "from-the-future", files: {} })}\n`,
+    );
+
+    const { code, stdout, stderr } = await runCapturing([dir], { diff: true });
+    assert.equal(code, 0, `a report must not refuse; stderr was ${stderr}`);
+    assert.match(stdout, /from-the-future/, "say which template it could not use");
+    assert.match(stdout, /next/, "and which one it compared against instead");
+  });
+
+  it("lists the templates when --template is given no value and no directory", async () => {
     const { code, stdout } = await runCapturing([], { template: null });
     assert.equal(code, 0);
     assert.match(stdout, /next/);

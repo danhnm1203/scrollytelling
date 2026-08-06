@@ -394,11 +394,26 @@ function templateFor(projectDir, override, { strict }) {
 
   const recordPath = join(projectDir, ".scrollytelling-version");
   if (existsSync(recordPath)) {
+    let recorded;
     try {
-      const record = JSON.parse(readFileSync(recordPath, "utf8"));
-      return resolveTemplate(record.template ?? DEFAULT_TEMPLATE);
+      recorded = JSON.parse(readFileSync(recordPath, "utf8")).template ?? DEFAULT_TEMPLATE;
     } catch {
-      // Corrupt. Fall through to the same handling as missing.
+      recorded = null; // Corrupt. Handled below as if it were missing.
+    }
+
+    if (recorded !== null) {
+      try {
+        return resolveTemplate(recorded);
+      } catch {
+        // A template this build does not know, rather than an unreadable
+        // record. Naming the right cause is the difference between "upgrade"
+        // and "re-scaffold", so do not fold it into the message below.
+        throw new PipelineError(
+          `${projectDir} records the "${recorded}" template, which this version of ` +
+            "scrollytelling does not know about.\n" +
+            "  Upgrade scrollytelling, or pass --template <name> to override.",
+        );
+      }
     }
   }
 

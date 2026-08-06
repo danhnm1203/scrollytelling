@@ -1,11 +1,10 @@
 /**
  * Where each template keeps its things.
  *
- * One data structure, three consumers: the scaffolder places files by it, the
- * frame pipeline resolves its output paths by it, and argument parsing names
- * the templates from it. The same shape `installableFiles()` already has, for
- * the same reason — three readers of one list cannot disagree about what a
- * template is.
+ * One data structure, two consumers: the scaffolder places files by it and the
+ * frame pipeline resolves its output paths by it. The same shape
+ * `installableFiles()` already has, for the same reason — readers of one list
+ * cannot disagree about what a template is.
  *
  * The rules worth testing are the ones whose failure is quiet. A template whose
  * runtime files land in two directories produces a worker that 404s. A template
@@ -32,29 +31,30 @@ describe("the manifest", () => {
     }
   });
 
-  it("keeps every runtime file in ONE directory per template", () => {
-    // Not a style rule. The engine finds its worker with
-    // `new URL("./decoder.worker.js", import.meta.url)`, which resolves
-    // relative to the module holding the literal — so the engine and the worker
-    // must be siblings. A manifest with independent per-file paths could put
-    // them apart, and the failure is a worker that 404s, which before the
-    // fallback existed meant a page that hung.
+  it("keeps every path inside the project", () => {
+    // The manifest supplies directories that get joined to a project root. A
+    // value that climbs out of it writes wherever it likes.
     for (const name of templateNames()) {
-      assert.equal(typeof TEMPLATES[name].libDir, "string");
-      assert.ok(!TEMPLATES[name].libDir.includes(".."), "libDir must not escape the project");
+      const t = TEMPLATES[name];
+      for (const key of ["dir", "libDir", "publicDir", "framesPath", "storyPath"]) {
+        assert.equal(typeof t[key], "string", `${name}.${key} must be a string`);
+        assert.ok(!t[key].split("/").includes(".."), `${name}.${key} must not climb out`);
+        assert.ok(!t[key].startsWith("/"), `${name}.${key} must be relative`);
+      }
     }
   });
 
-  it("puts the staging directory on the same filesystem as its destination", () => {
-    // `frames` writes to <public>/frames.partial and renames it into place at
-    // the very end. A rename is atomic only within one filesystem; split these
-    // across roots and a failure leaves a half-written frame directory that the
-    // page will happily read.
+  it("puts the frames contract and the story in the same place the runtime reads", () => {
+    // A template whose data paths disagree with where its adapter imports from
+    // produces a project that builds and renders nothing. Nothing checks that
+    // correspondence automatically — the per-template build gate is what does —
+    // so at minimum they must be plausible siblings rather than unrelated.
     for (const name of templateNames()) {
       const t = TEMPLATES[name];
-      assert.ok(
-        t.publicDir !== undefined,
-        `${name} needs a publicDir so staging and destination share a root`,
+      assert.equal(
+        t.framesPath.split("/").slice(0, -1).join("/"),
+        t.storyPath.split("/").slice(0, -1).join("/"),
+        `${name}: the generated contract and the hand-written story live together`,
       );
     }
   });
