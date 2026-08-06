@@ -58,10 +58,10 @@ export const BUILD_PLANS = {
   nuxt: {
     install: ["npm", "install", "--no-audit", "--no-fund"],
     build: ["npm", "run", "build"],
-    // Nuxt splits its output: .output/public/ is what a browser is served,
-    // .output/server/ is the node server that serves it. Both are searched,
-    // because the worker and the frames land on the public side while nothing
-    // guarantees the stylesheet does not get inlined by the server build.
+    // Nuxt splits its output: .output/public/ is what a browser is served and
+    // .output/server/ is the node server that serves it. One recursive walk of
+    // .output covers both, so there is nothing extra to search — the worker,
+    // the stylesheet and the frames all land under public/.
     outDir: ".output",
     alsoSearch: [],
   },

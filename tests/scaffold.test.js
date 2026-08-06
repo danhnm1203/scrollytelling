@@ -122,6 +122,93 @@ describe("scaffold — the Astro template", () => {
   });
 });
 
+describe("scaffold — the Nuxt template", () => {
+  it("generates a project laid out the way Nuxt expects", async () => {
+    const dir = join(tempDir(), "site");
+    const { code } = await runCapturing([dir], { template: "nuxt" });
+    assert.equal(code, 0);
+
+    for (const f of [
+      "package.json",
+      "nuxt.config.ts",
+      "app/app.vue",
+      "app/components/frames.js",
+      "app/lib/scroll-engine.mjs",
+    ]) {
+      assert.ok(existsSync(join(dir, f)), `${f} must exist`);
+    }
+  });
+
+  it("puts the worker beside the engine", async () => {
+    const dir = join(tempDir(), "site");
+    await runCapturing([dir], { template: "nuxt" });
+
+    assert.ok(existsSync(join(dir, "app/lib/scroll-engine.mjs")));
+    assert.ok(existsSync(join(dir, "app/lib/decoder.worker.js")));
+  });
+
+  it("builds its own outline rather than needing one written in", async () => {
+    // Nuxt renders on the server, so app.vue maps the story itself. Only the
+    // template with no render step needs `frames` to write the outline.
+    const dir = join(tempDir(), "site");
+    await runCapturing([dir], { template: "nuxt" });
+
+    const page = readFileSync(join(dir, "app/app.vue"), "utf8");
+    assert.match(page, /v-for="beat in story\.sections"/, "the outline comes from the story");
+    assert.match(page, /class="story-outline"/);
+    assert.match(page, /data-scrollytelling-poster/, "the server-rendered first frame");
+    assert.ok(!/scrollytelling:outline/.test(page), "no generated block is needed here");
+  });
+
+  it("keeps frames.js and story.js out of the component scan", async () => {
+    // Nuxt registers everything under app/components/ as a component, .js
+    // included. These two are data. Without narrowing the scan they become
+    // phantom components named Frames and Story — nothing renders them, so
+    // nothing fails loudly, which is the reason to pin it with a test.
+    const dir = join(tempDir(), "site");
+    await runCapturing([dir], { template: "nuxt" });
+
+    const config = readFileSync(join(dir, "nuxt.config.ts"), "utf8");
+    assert.match(config, /extensions:\s*\["vue"\]/, "the scan must be narrowed to .vue");
+  });
+
+  it("stops the engine when the page goes away", async () => {
+    // Nuxt keeps the page alive across client-side navigation, so the engine
+    // has to be told to stop. Without this its scroll listener, its animation
+    // frame and every pinned ImageBitmap outlive the page that made them. No
+    // other template navigates away from itself, so no other one needs it.
+    const dir = join(tempDir(), "site");
+    await runCapturing([dir], { template: "nuxt" });
+
+    const page = readFileSync(join(dir, "app/app.vue"), "utf8");
+    assert.match(page, /onBeforeUnmount/);
+    assert.match(page, /dispose\?\.\(\)/, "dispose is what mount() hands back");
+  });
+
+  it("checks its JavaScript, so a mistyped beat still fails the build", async () => {
+    const dir = join(tempDir(), "site");
+    await runCapturing([dir], { template: "nuxt" });
+
+    const tsconfig = JSON.parse(
+      readFileSync(join(dir, "tsconfig.json"), "utf8").replace(/^\s*\/\/.*$/gm, ""),
+    );
+    assert.equal(tsconfig.compilerOptions.checkJs, true);
+    assert.ok(
+      tsconfig.exclude.some((e) => e.includes("decoder.worker")),
+      "the worker cannot be checked against DOM globals",
+    );
+  });
+
+  it("commits the frames", async () => {
+    const dir = join(tempDir(), "site");
+    await runCapturing([dir], { template: "nuxt" });
+
+    const ignore = readFileSync(join(dir, ".gitignore"), "utf8");
+    assert.match(ignore, /^!public\/frames\//m);
+    assert.match(ignore, /^!\.scrollytelling-version$/m);
+  });
+});
+
 describe("scaffold — the no-build template", () => {
   it("generates a page that needs nothing installed", async () => {
     const dir = join(tempDir(), "site");

@@ -11,6 +11,7 @@
  * is the markup plus the handful of lines that hand it a container.
  */
 import { onMounted, onBeforeUnmount, ref } from "vue";
+import { useHead } from "#imports";
 
 import { SEQUENCES, framePath } from "./components/frames.js";
 import { story } from "./components/story.js";

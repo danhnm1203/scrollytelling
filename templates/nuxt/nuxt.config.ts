@@ -1,5 +1,8 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
 export default defineNuxtConfig({
+  // Nuxt requires this and never bumps it for you. It is the date this template
+  // was written, not the date you scaffolded — raise it when you upgrade Nuxt
+  // and have read what changed.
   compatibilityDate: "2026-08-06",
 
   // Nuxt scans app/components/ and registers everything it finds there as a
@@ -10,7 +13,12 @@ export default defineNuxtConfig({
   // Nothing renders them, so nothing breaks loudly; you get two phantom entries
   // and a slower scan. Narrowing it is what lets them keep the same name and
   // the same place they have on every other template.
-  components: [{ path: "~/components", extensions: ["vue"] }],
+  //
+  // `dirs` rather than a bare array, because an array REPLACES Nuxt's defaults
+  // and silently drops ~/components/global. Nothing here uses that, so the loss
+  // would surface much later as a global component that is inexplicably not
+  // global.
+  components: { dirs: [{ path: "~/components", extensions: ["vue"] }] },
 
   // The engine's stylesheet, shared with every other template. Loaded here
   // rather than imported inside app.vue so it lands in the same place Nuxt puts
