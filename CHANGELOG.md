@@ -23,6 +23,14 @@ here — inventing history is worse than admitting it was not kept.
 
   Skill file only. The CLI already accepted all four names and still does.
 
+- **Three version numbers disagreed about which release this is.** The plugin
+  manifest still said 0.3.0 and the skill's own metadata still said 0.1.0, both
+  left behind while `package.json` moved. All three read 0.4.2 now, and a
+  release bumps all three from here.
+
+  The `package.json` inside each template stays at 0.1.0 on purpose: that is the
+  version of the site somebody scaffolds, not of the tool that scaffolded it.
+
 ## 0.4.1
 
 ### Fixed
