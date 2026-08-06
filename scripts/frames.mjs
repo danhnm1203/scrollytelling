@@ -35,6 +35,7 @@ import { basename, dirname, extname, join } from "node:path";
 import { edgeColor, lumaGrid, LUMA_COLS, LUMA_ROWS } from "../lib/measure.mjs";
 import { naturalCompare, decimate, timestampsFor } from "../lib/sequence-plan.mjs";
 import { DEFAULT_TEMPLATE, resolveTemplate } from "../lib/template-manifest.mjs";
+import { replaceOutline } from "../lib/outline.mjs";
 import {
   regionLuma,
   maxEdgeDelta,
@@ -42,6 +43,7 @@ import {
   parseSequences,
   beatLuma,
   REGIONS,
+  parseStory,
 } from "../lib/report.mjs";
 
 const IMAGE_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".webp", ".tif", ".tiff", ".avif"]);
@@ -427,6 +429,33 @@ function templateFor(projectDir, override, { strict }) {
   return resolveTemplate(DEFAULT_TEMPLATE);
 }
 
+/**
+ * Rewrites the story outline in a page that has no render step.
+ *
+ * Only the block between the markers; everything else on that page belongs to
+ * whoever generated the project.
+ */
+function writeOutline(projectDir, template) {
+  const pagePath = join(projectDir, template.outlinePath);
+  const storyPath = join(projectDir, template.storyPath);
+
+  if (!existsSync(pagePath) || !existsSync(storyPath)) return;
+
+  try {
+    const story = parseStory(readFileSync(storyPath, "utf8"));
+    const page = readFileSync(pagePath, "utf8");
+    writeFileSync(pagePath, replaceOutline(page, story));
+  } catch (err) {
+    // Loud, not fatal. The frames themselves encoded fine and the page will
+    // still scrub; what is stale is the copy a screen reader gets, and saying
+    // nothing about that is the one outcome this project does not allow.
+    process.stderr.write(
+      `scrollytelling: the frames are written, but the story outline in ` +
+        `${template.outlinePath} could not be updated — ${err.message}\n`,
+    );
+  }
+}
+
 function renderContract(sequences, publicDir) {
   const json = JSON.stringify(
     sequences.map((s) => ({
@@ -596,6 +625,11 @@ async function frames(positionals, flags) {
     const framesOut = join(projectDir, template.framesPath);
     mkdirSync(dirname(framesOut), { recursive: true });
     writeFileSync(framesOut, renderContract(sequences, template.publicDir));
+
+    // A template with no render step cannot build its own story outline, and
+    // that outline is what assistive technology reads and what the page becomes
+    // under reduced motion. Regenerated from the story so the two cannot drift.
+    if (template.outlinePath) writeOutline(projectDir, template);
 
     report({ sequences, bytes, warnings });
     return 0;

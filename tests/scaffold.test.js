@@ -60,6 +60,55 @@ async function runCapturing(positionals, flags = {}) {
   }
 }
 
+describe("scaffold — the no-build template", () => {
+  it("generates a page that needs nothing installed", async () => {
+    const dir = join(tempDir(), "site");
+    const { code } = await runCapturing([dir], { template: "html" });
+    assert.equal(code, 0);
+
+    for (const f of ["index.html", "main.js", "components/frames.js", "lib/scroll-engine.mjs"]) {
+      assert.ok(existsSync(join(dir, f)), `${f} must exist`);
+    }
+    // The whole claim of this template. A package.json would mean npm install.
+    assert.ok(!existsSync(join(dir, "package.json")), "there is nothing to install");
+    assert.ok(!existsSync(join(dir, "tsconfig.json")), "there is nothing to compile");
+  });
+
+  it("puts the worker beside the engine it is resolved from", async () => {
+    // `new URL("./decoder.worker.js", import.meta.url)` resolves relative to the
+    // engine. With no bundler to rewrite it, the two being siblings is the only
+    // thing making the worker reachable.
+    const dir = join(tempDir(), "site");
+    await runCapturing([dir], { template: "html" });
+
+    assert.ok(existsSync(join(dir, "lib/scroll-engine.mjs")));
+    assert.ok(existsSync(join(dir, "lib/decoder.worker.js")));
+  });
+
+  it("renders a poster the engine adopts, and the outline markers", async () => {
+    const dir = join(tempDir(), "site");
+    await runCapturing([dir], { template: "html" });
+
+    const html = readFileSync(join(dir, "index.html"), "utf8");
+    assert.match(html, /data-scrollytelling-poster/, "the server-rendered first frame");
+    assert.match(html, /data-scrollytelling\b/, "the container the engine mounts into");
+    assert.match(html, /scrollytelling:outline/, "the block frames regenerates");
+    assert.match(html, /class="story-outline"/, "what assistive technology reads");
+    assert.match(html, /lib\/scroll-engine\.css/, "the engine stylesheet, not Tailwind");
+  });
+
+  it("commits the frames, like every other template", async () => {
+    // A deploy builds from a fresh clone. Without this the page has nothing
+    // to draw and nothing says so.
+    const dir = join(tempDir(), "site");
+    await runCapturing([dir], { template: "html" });
+
+    const ignore = readFileSync(join(dir, ".gitignore"), "utf8");
+    assert.match(ignore, /^!frames\//m);
+    assert.match(ignore, /^!\.scrollytelling-version$/m);
+  });
+});
+
 describe("scaffold", () => {
   it("produces a project whose files all exist", async () => {
     const dir = join(tempDir(), "site");
