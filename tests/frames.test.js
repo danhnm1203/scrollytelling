@@ -73,7 +73,7 @@ async function stillsDir(count, { width = 160, height = 90, names } = {}) {
 
 /** Reads the generated contract without importing it as TypeScript. */
 function readContract(projectDir) {
-  return readFileSync(join(projectDir, "components/frames.ts"), "utf8");
+  return readFileSync(join(projectDir, "components/frames.js"), "utf8");
 }
 
 /**
@@ -644,7 +644,7 @@ describe("frames — per-beat check", () => {
     await runCapturing([src, project], { frames: 6, "skip-portrait": true });
 
     writeFileSync(
-      join(project, "components/story.ts"),
+      join(project, "components/story.js"),
       `export const story = { brand: "X", sections: ${JSON.stringify(beats)} };\n`,
     );
     return project;
@@ -685,7 +685,7 @@ describe("frames — per-beat check", () => {
   it("explains that generation comes first when there are no frames", async () => {
     const bare = join(tempDir(), "site");
     prepareProject(bare);
-    writeFileSync(join(bare, "components/story.ts"), "export const story = { sections: [] };\n");
+    writeFileSync(join(bare, "components/story.js"), "export const story = { sections: [] };\n");
 
     const { code, stderr } = await runCapturing([bare], { check: true });
 
@@ -695,12 +695,12 @@ describe("frames — per-beat check", () => {
 
   it("explains when there is no copy to check", async () => {
     const project = await projectWith(5, []);
-    rmSync(join(project, "components/story.ts"));
+    rmSync(join(project, "components/story.js"));
 
     const { code, stderr } = await runCapturing([project], { check: true });
 
     assert.notEqual(code, 0);
-    assert.match(stderr, /story\.ts/);
+    assert.match(stderr, /story\.js/);
   });
 
   it("requires a project directory", async () => {
@@ -765,9 +765,9 @@ describe("frames — which template a project uses", () => {
     // silent recovery was written to avoid. Only the data-writing path errors.
     const project = join(tempDir(), "site");
     mkdirSync(join(project, "components"), { recursive: true });
-    writeFileSync(join(project, "components/frames.ts"), "export const SEQUENCES = [];\n");
+    writeFileSync(join(project, "components/frames.js"), "export const SEQUENCES = [];\n");
     writeFileSync(
-      join(project, "components/story.ts"),
+      join(project, "components/story.js"),
       "export const story = { brand: \"x\", title: \"x\", description: \"x\", sections: [] };\n",
     );
 

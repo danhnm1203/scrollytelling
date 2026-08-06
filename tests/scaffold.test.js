@@ -75,8 +75,10 @@ describe("scaffold", () => {
       "app/layout.tsx",
       "app/page.tsx",
       "app/globals.css",
-      "components/story.ts",
-      "components/frames.ts",
+      "components/story.js",
+      "components/frames.js",
+      "components/frames.d.ts",
+      "components/story.d.ts",
       "components/ScrollSequence.tsx",
       // Copied from lib/, not duplicated under templates/, so there is only
       // ever one copy of the display math in this repo.
@@ -354,6 +356,40 @@ describe("scaffold", () => {
     assert.match(stdout, /Available templates/i);
   });
 
+  it("keeps the story and the contract type-checked after moving them to .js", async () => {
+    // allowJs permits JavaScript in the program; it does not put it there.
+    // Without both of these the move to .js would silently stop checking the
+    // one file users edit most — a mistyped `align` or a missing `body` would
+    // survive to runtime.
+    const dir = join(tempDir(), "site");
+    await runCapturing([dir]);
+
+    const tsconfig = JSON.parse(
+      readFileSync(join(dir, "tsconfig.json"), "utf8").replace(/^\s*\/\/.*$/gm, ""),
+    );
+    assert.equal(tsconfig.compilerOptions.checkJs, true, "JavaScript must be checked");
+    assert.ok(tsconfig.include.includes("**/*.js"), "JavaScript must be in the program");
+
+    // The worker runs in a Worker context, not a window. Left in, tsc measures
+    // it against DOM globals and a clean scaffold fails to build.
+    assert.ok(
+      tsconfig.exclude.some((e) => e.includes("decoder.worker")),
+      "the worker cannot be checked against DOM globals",
+    );
+  });
+
+  it("ships types alongside the JavaScript data files", async () => {
+    const dir = join(tempDir(), "site");
+    await runCapturing([dir]);
+
+    for (const f of ["components/frames.js", "components/frames.d.ts",
+                     "components/story.js", "components/story.d.ts"]) {
+      assert.ok(existsSync(join(dir, f)), `${f} must exist`);
+    }
+    assert.ok(!existsSync(join(dir, "components/frames.ts")), "the .ts contract is gone");
+    assert.ok(!existsSync(join(dir, "components/story.ts")), "the .ts story is gone");
+  });
+
   it("renders a poster the engine can adopt", async () => {
     // The handshake the whole server-rendered-first-frame story rests on. The
     // engine looks for this attribute and adopts the element instead of
@@ -371,14 +407,14 @@ describe("scaffold", () => {
     const dir = join(tempDir(), "site");
     await runCapturing([dir]);
 
-    const storyPath = join(dir, "components/story.ts");
+    const storyPath = join(dir, "components/story.js");
     writeFileSync(storyPath, "// my own copy\n");
 
     const { code, stdout } = await runCapturing([dir]);
 
     assert.equal(code, 0);
     assert.equal(readFileSync(storyPath, "utf8"), "// my own copy\n");
-    assert.match(stdout, /components\/story\.ts/);
+    assert.match(stdout, /components\/story\.js/);
     assert.match(stdout, /skip/i);
   });
 
@@ -386,7 +422,7 @@ describe("scaffold", () => {
     const dir = join(tempDir(), "site");
     await runCapturing([dir]);
 
-    const storyPath = join(dir, "components/story.ts");
+    const storyPath = join(dir, "components/story.js");
     writeFileSync(storyPath, "// my own copy\n");
 
     const { code, stdout } = await runCapturing([dir], { force: true });

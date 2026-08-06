@@ -7,6 +7,10 @@
       "esnext"
     ],
     "allowJs": true,
+    // Without this, moving the story and the contract to .js would silently
+    // stop checking them — allowJs permits JavaScript in the program, it does
+    // not put it there. The story is the file you edit most.
+    "checkJs": true,
     "skipLibCheck": true,
     "strict": true,
     "noEmit": true,
@@ -32,10 +36,17 @@
     "next-env.d.ts",
     "**/*.ts",
     "**/*.tsx",
+    "**/*.js",
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts"
   ],
   "exclude": [
-    "node_modules"
+    "node_modules",
+    // Runs in a Worker, not a window. With checkJs on, tsc measures it against
+    // DOM globals and rejects `self.postMessage(msg, [transfer])`, which is
+    // correct worker code. The DOM and WebWorker libs cannot both be active in
+    // one program, so the honest answer is to leave this file out rather than
+    // weaken the checking that now protects the story file.
+    "lib/decoder.worker.js"
   ]
 }
