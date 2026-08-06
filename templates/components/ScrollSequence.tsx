@@ -39,7 +39,7 @@
 
 import { useEffect, useRef, useState } from "react";
 
-import { SEQUENCES, framePath, type Sequence } from "@/components/frames";
+import { SEQUENCES, framePath } from "@/components/frames";
 import { story } from "@/components/story";
 import { mount, type EngineState } from "@/lib/scroll-engine";
 import { scrollHeightVh } from "@/lib/scroll-math";
@@ -71,7 +71,6 @@ export function ScrollSequence() {
   }, []);
 
   const reduced = state.phase === "reduced";
-  const ready = state.phase === "ready";
   const sequence = SEQUENCES[0];
 
   if (!sequence) return <NoFrames reason="empty" />;

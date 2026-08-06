@@ -603,3 +603,78 @@ describe("mount — overlays", () => {
     assert.equal(byClass(container, "st-progress").length, 0);
   });
 });
+
+describe("mount — feedback during the opening decode", () => {
+  const settle = () => new Promise((r) => setTimeout(r, 0));
+
+  it("shows a percentage while the opening frames decode", () => {
+    // On a slow connection the alternative is a still image and no reason to
+    // wait. The CSS for this existed for a whole commit while nothing built it.
+    const container = el();
+    const env = scrubbingEnvironment();
+    const dispose = mount(container, { ...OPTS(), env });
+
+    const pill = byClass(container, "st-loading__pill")[0];
+    assert.ok(pill, "expected a loading indicator");
+    assert.match(pill.textContent, /%/);
+    dispose();
+  });
+
+  it("keeps the scrubbing chrome hidden until there is something to scrub", () => {
+    // A progress bar and a "Scroll" cue over a poster that cannot yet be
+    // scrolled through is worse than no chrome at all.
+    const container = el();
+    const env = scrubbingEnvironment();
+    const dispose = mount(container, { ...OPTS(), env });
+    env.paint();
+
+    assert.equal(byClass(container, "st-progress")[0].style.opacity, "0");
+    assert.equal(byClass(container, "st-hint")[0].style.opacity, "0");
+    dispose();
+  });
+
+  it("swaps the percentage for the chrome once ready", async () => {
+    const container = el();
+    const env = scrubbingEnvironment();
+    const dispose = mount(container, { ...OPTS(), env });
+    await settle();
+    env.paint();
+
+    assert.equal(byClass(container, "st-loading")[0].style.display, "none");
+    assert.equal(byClass(container, "st-progress")[0].style.opacity, "1");
+    dispose();
+  });
+
+  it("keeps the copy tracking the scroll even with no frame decoded", () => {
+    // The draw loop returns early when nothing is decoded. Painting the
+    // overlays after that return freezes the copy mid-scrub while the footage
+    // behind it keeps moving.
+    const container = el();
+    const env = scrubbingEnvironment();
+    const dispose = mount(container, { ...OPTS(), env });
+
+    env.paint();
+
+    const beats = byClass(container, "st-beat");
+    assert.ok(
+      beats.some((b) => b.style.opacity !== undefined && b.style.opacity !== ""),
+      "overlays must be positioned on every frame, not only drawable ones",
+    );
+    dispose();
+  });
+
+  it("warns rather than silently rendering a page with no copy", () => {
+    const container = el();
+    const env = scrubbingEnvironment();
+    const warnings = [];
+    env.console = { warn: (m) => warnings.push(m), info() {} };
+
+    const dispose = mount(container, { ...OPTS(), env, story: { sections: [] } });
+
+    assert.ok(
+      warnings.some((w) => /no story sections/i.test(w)),
+      "a wordless page should not be the one thing that happens quietly",
+    );
+    dispose();
+  });
+});
