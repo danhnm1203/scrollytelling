@@ -128,8 +128,8 @@ async function pipeline(dir) {
   await run(process.execPath, [
     CLI, "frames", clip, project, "--frames", String(SAMPLED), "--skip-portrait",
   ]);
-  const source = readFileSync(join(project, "components/frames.ts"), "utf8");
-  const m = /SEQUENCES\s*=\s*(\[[\s\S]*?\])\s*as const/.exec(source);
+  const source = readFileSync(join(project, "components/frames.js"), "utf8");
+  const m = /SEQUENCES\s*=\s*(\[[\s\S]*?\]);/.exec(source);
   assert.ok(m, "expected a SEQUENCES array in the generated contract");
   return { project, sequence: JSON.parse(m[1])[0] };
 }

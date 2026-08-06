@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ORBIT — every part accounted for</title>
+    <meta
+      name="description"
+      content="A scroll-driven look at how Orbit comes apart, and how precisely it goes back together."
+    />
+    <link rel="stylesheet" href="./lib/scroll-engine.css" />
+    <style>
+      :root {
+        /* Replaced at runtime by each frame's own edge colour, so the canvas
+           has no visible edge against the page. */
+        --page-bg: #050505;
+        color-scheme: dark;
+      }
+      html,
+      body {
+        margin: 0;
+        background: var(--page-bg);
+        font-family:
+          system-ui,
+          -apple-system,
+          Segoe UI,
+          sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      [data-scrollytelling] {
+        position: sticky;
+        top: 0;
+        height: 100vh;
+        width: 100%;
+      }
+      [data-scrollytelling-empty] {
+        display: grid;
+        min-height: 100vh;
+        place-items: center;
+        padding: 0 1.5rem;
+        text-align: center;
+        color: rgb(255 255 255 / 0.9);
+      }
+      [data-scrollytelling-empty] code {
+        display: inline-block;
+        border-radius: 0.25rem;
+        background: rgb(255 255 255 / 0.05);
+        padding: 0.5rem 0.75rem;
+        color: rgb(255 255 255 / 0.7);
+      }
+    </style>
+  </head>
+  <body>
+    <!--
+      The story, once, as ordinary prose.
+
+      Visually hidden but present in the document, so a screen reader gets one
+      coherent description and a crawler sees the whole page's copy. It is also
+      the page a visitor gets when they have asked for reduced motion: the
+      scrub does not run then, and lib/scroll-engine.css makes this visible
+      rather than inventing a second, lesser version of the same copy.
+
+      GENERATED from components/story.js by `scrollytelling frames`. Edit the
+      story, not this — anything between the markers is replaced.
+    -->
+    <!-- scrollytelling:outline -->
+    <main class="story-outline">
+      <h1>ORBIT</h1>
+      <p>
+        A scroll-driven look at how Orbit comes apart, and how precisely it goes back together.
+      </p>
+      <section>
+        <h2>Every part accounted for</h2>
+        <p>Forty-one components, machined to a tolerance you can measure in microns.</p>
+      </section>
+    </main>
+    <!-- /scrollytelling:outline -->
+
+    <div data-scrollytelling-runway aria-hidden="true">
+      <div data-scrollytelling>
+        <!--
+          The opening frame as a plain image. It is what the page paints first,
+          what a link preview shows, and what a visitor with scripting disabled
+          gets. The engine adopts this element rather than replacing it — the
+          data attribute is that handshake, so do not remove it.
+        -->
+        <img
+          data-scrollytelling-poster
+          src="./frames/landscape_0.webp"
+          alt=""
+          style="position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover"
+        />
+      </div>
+    </div>
+
+    <div data-scrollytelling-empty hidden>
+      <div>
+        <p>No frames yet.</p>
+        <p>Generate a sequence to make this page scroll:</p>
+        <code>scrollytelling frames &lt;video&gt; .</code>
+      </div>
+    </div>
+
+    <script type="module" src="./main.js"></script>
+  </body>
+</html>
