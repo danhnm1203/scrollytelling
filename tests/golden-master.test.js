@@ -119,6 +119,12 @@ async function makeClip(dir) {
 async function pipeline(dir) {
   const clip = await makeClip(dir);
   const project = join(dir, "site");
+
+  // Scaffold first, because that is the pipeline. `frames` refuses a directory
+  // whose template it cannot determine — guessing would write the contract and
+  // the frames to paths nothing reads.
+  await run(process.execPath, [CLI, "scaffold", project]);
+
   await run(process.execPath, [
     CLI, "frames", clip, project, "--frames", String(SAMPLED), "--skip-portrait",
   ]);

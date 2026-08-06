@@ -16,9 +16,12 @@ lib/scroll-math.mjs  the primitives — scale, easing, fade, scrim. pure, fully 
 lib/scroll-engine-state.mjs
                      what the runtime decides, composed from those primitives:
                      load state, decode window, draw parameters. pure, no DOM
+lib/template-manifest.mjs
+                     where each template keeps its things — one list, read by
+                     the scaffolder and the frame pipeline
 scripts/frames.mjs   extract, measure, encode  (sharp + ffmpeg-static live HERE)
-scripts/scaffold.mjs copy templates/          (node:fs only)
-templates/           the generated Next.js project
+scripts/scaffold.mjs copy templates/<name>/    (node:fs only)
+templates/<name>/    one directory per template; templates/next/ is the default
 tests/               node:test, no build step
 ```
 

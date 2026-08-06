@@ -61,3 +61,15 @@ test("sharp and ffmpeg-static are pinned exactly — golden masters depend on th
     assert.match(range, /^\d+\.\d+\.\d+$/, `${dep} must be pinned, got "${range}"`);
   }
 });
+
+test("help names --template on both commands that take it", async () => {
+  // A flag nobody can discover is a flag nobody uses. This one selects the
+  // whole shape of the generated project.
+  const { stdout } = await run(process.execPath, [CLI, "--help"]);
+  assert.match(stdout, /--template/, "scaffold's flag must be documented");
+  assert.equal(
+    (stdout.match(/--template/g) ?? []).length,
+    3,
+    "usage line, scaffold options, and the frames override",
+  );
+});

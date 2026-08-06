@@ -30,10 +30,11 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, extname, join } from "node:path";
+import { basename, dirname, extname, join } from "node:path";
 
 import { edgeColor, lumaGrid, LUMA_COLS, LUMA_ROWS } from "../lib/measure.mjs";
 import { naturalCompare, decimate, timestampsFor } from "../lib/sequence-plan.mjs";
+import { DEFAULT_TEMPLATE, resolveTemplate } from "../lib/template-manifest.mjs";
 import {
   regionLuma,
   maxEdgeDelta,
@@ -379,6 +380,53 @@ function planSequences({ width, height, maxWidth, focus, skipPortrait }) {
 
 /* -------------------------------------------------------------- contract -- */
 
+/**
+ * Which template's layout this project uses.
+ *
+ * `strict` is the difference between the two commands. Writing data to the
+ * wrong paths produces a project that builds and renders nothing, so `frames`
+ * refuses when it cannot tell. `--check` only reads and reports, and turning a
+ * reporting command into one that refuses is the instinct readRecord's
+ * deliberate silent recovery was written to avoid — so it falls back.
+ */
+function templateFor(projectDir, override, { strict }) {
+  if (override) return resolveTemplate(override);
+
+  const recordPath = join(projectDir, ".scrollytelling-version");
+  if (existsSync(recordPath)) {
+    let recorded;
+    try {
+      recorded = JSON.parse(readFileSync(recordPath, "utf8")).template ?? DEFAULT_TEMPLATE;
+    } catch {
+      recorded = null; // Corrupt. Handled below as if it were missing.
+    }
+
+    if (recorded !== null) {
+      try {
+        return resolveTemplate(recorded);
+      } catch {
+        // A template this build does not know, rather than an unreadable
+        // record. Naming the right cause is the difference between "upgrade"
+        // and "re-scaffold", so do not fold it into the message below.
+        throw new PipelineError(
+          `${projectDir} records the "${recorded}" template, which this version of ` +
+            "scrollytelling does not know about.\n" +
+            "  Upgrade scrollytelling, or pass --template <name> to override.",
+        );
+      }
+    }
+  }
+
+  if (strict) {
+    throw new PipelineError(
+      `${projectDir} has no readable .scrollytelling-version, so which template ` +
+        "it uses is unknown and frames could be written where nothing reads them.\n" +
+        "  Run `scrollytelling scaffold <dir>` first, or pass --template <name>.",
+    );
+  }
+  return resolveTemplate(DEFAULT_TEMPLATE);
+}
+
 function renderContract(sequences) {
   const json = JSON.stringify(
     sequences.map((s) => ({
@@ -443,7 +491,7 @@ async function frames(positionals, flags) {
   const { sharp, ffmpegPath } = await loadDependencies();
 
   if (flags.preview) return previewMode(positionals, flags, { sharp, ffmpegPath });
-  if (flags.check) return checkMode(positionals);
+  if (flags.check) return checkMode(positionals, flags);
 
   const [inputPath, projectDir] = positionals;
   if (!inputPath || !projectDir) {
@@ -466,10 +514,20 @@ async function frames(positionals, flags) {
     );
   }
 
+  // After classifyInput deliberately. Both can fail, and the one about the
+  // argument just typed is more useful than the one about a file set up days
+  // ago — being told "no version record" when the clip path is a typo sends
+  // you looking in the wrong place.
   const input = classifyInput(inputPath);
+
+  // Strict: writing the contract and the frames to the wrong paths produces a
+  // project that builds and renders nothing, which is worth refusing over.
+  const template = templateFor(projectDir, flags.template, { strict: true });
   const workDir = mkdtempSync(join(tmpdir(), "ost-work-"));
-  const partial = join(projectDir, "public", "frames.partial");
-  const final = join(projectDir, "public", "frames");
+  // Staging and destination share publicDir on purpose: the rename at the end
+  // is atomic only within one filesystem.
+  const partial = join(projectDir, template.publicDir, "frames.partial");
+  const final = join(projectDir, template.publicDir, "frames");
 
   try {
     let { sources, warnings } = await gatherSources(input, requested, workDir, ffmpegPath);
@@ -531,8 +589,9 @@ async function frames(positionals, flags) {
     rmSync(final, { recursive: true, force: true });
     renameSync(partial, final);
 
-    mkdirSync(join(projectDir, "components"), { recursive: true });
-    writeFileSync(join(projectDir, "components", "frames.ts"), renderContract(sequences));
+    const framesOut = join(projectDir, template.framesPath);
+    mkdirSync(dirname(framesOut), { recursive: true });
+    writeFileSync(framesOut, renderContract(sequences));
 
     report({ sequences, bytes, warnings });
     return 0;
@@ -664,14 +723,15 @@ function describeSequence(sequence) {
  * to check. It re-reads the generated contract rather than the source footage,
  * so it costs nothing.
  */
-async function checkMode(positionals) {
+async function checkMode(positionals, flags) {
   const [projectDir] = positionals;
   if (!projectDir) {
     throw new PipelineError("check needs a project directory. Try: frames --check ./my-site");
   }
 
-  const framesPath = join(projectDir, "components", "frames.ts");
-  const storyPath = join(projectDir, "components", "story.ts");
+  const template = templateFor(projectDir, flags?.template, { strict: false });
+  const framesPath = join(projectDir, template.framesPath);
+  const storyPath = join(projectDir, template.storyPath);
 
   if (!existsSync(framesPath)) {
     throw new PipelineError(
@@ -694,7 +754,7 @@ async function checkMode(positionals) {
     );
   }
   if (beats.length === 0) {
-    process.stdout.write("No beats to check — components/story.ts has an empty sections list.\n");
+    process.stdout.write(`No beats to check — ${template.storyPath} has an empty sections list.\n`);
     return 0;
   }
 
