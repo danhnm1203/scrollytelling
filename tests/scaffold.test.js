@@ -86,6 +86,11 @@ describe("scaffold", () => {
       // imports these, so a project without them does not build.
       "lib/scroll-engine-state.mjs",
       "lib/scroll-engine-state.d.ts",
+      "lib/scroll-engine.mjs",
+      "lib/scroll-engine.d.ts",
+      // Must sit beside scroll-engine.mjs — the engine resolves it relative to
+      // its own module URL, so splitting them 404s the worker.
+      "lib/decoder.worker.js",
     ]) {
       assert.ok(existsSync(join(dir, f)), `expected ${f} to exist`);
     }
@@ -162,11 +167,12 @@ describe("scaffold", () => {
     const dir = join(tempDir(), "site");
     await runCapturing([dir]);
 
-    const sequence = readFileSync(join(dir, "components/ScrollSequence.tsx"), "utf8");
+    // The engine owns the media query now; the adapter owns the outline.
+    const engine = readFileSync(join(dir, "lib/scroll-engine.mjs"), "utf8");
     const css = readFileSync(join(dir, "app/globals.css"), "utf8");
     const page = readFileSync(join(dir, "app/page.tsx"), "utf8");
 
-    assert.match(sequence, /prefers-reduced-motion: reduce/);
+    assert.match(engine, /prefers-reduced-motion: reduce/);
     assert.match(css, /@media \(prefers-reduced-motion: reduce\)/);
     // The outline has to be addressable from CSS for the media query to
     // promote it from screen-reader-only to the page itself.
@@ -183,12 +189,12 @@ describe("scaffold", () => {
     const dir = join(tempDir(), "site");
     await runCapturing([dir]);
 
-    const sequence = readFileSync(join(dir, "components/ScrollSequence.tsx"), "utf8");
+    const engine = readFileSync(join(dir, "lib/scroll-engine.mjs"), "utf8");
 
-    // Both spellings, so moving to addEventListener during the engine
-    // extraction is a refactor rather than a false failure.
+    // Both spellings, so moving to addEventListener later is a refactor rather
+    // than a false failure.
     const handler = /worker\.onerror|addEventListener\(\s*["']error["']/;
-    assert.match(sequence, handler, "the worker needs a failure handler");
+    assert.match(engine, handler, "the worker needs a failure handler");
 
     // An empty handler satisfies the line above and fixes nothing. What makes
     // it a fallback is recovering the frames that were in flight, so require
@@ -199,9 +205,9 @@ describe("scaffold", () => {
     // that marker ever moves the slice runs to end of file, which still rules
     // out the case that matters: the import sits above the handler, so a
     // forward slice can never be satisfied by it alone.
-    const from = sequence.search(handler);
-    const to = sequence.indexOf("ensureWindowRef.current =", from);
-    const body = sequence.slice(from, to === -1 ? undefined : to);
+    const from = engine.search(handler);
+    const to = engine.indexOf("const ensureWindow =", from);
+    const body = engine.slice(from, to === -1 ? undefined : to);
 
     assert.match(
       body,
@@ -209,11 +215,14 @@ describe("scaffold", () => {
       "the failure handler must re-request the frames abandoned with the worker",
     );
 
-    // Asserted against the handler, not the file. There is a second
-    // console.warn further down for failed frames, so a file-wide check would
-    // pass with this warning deleted — which is the whole diagnostic gone.
-    assert.match(body, /console\.warn/, "a silent fallback is the bug, not the fix");
-    assert.match(body, /WORKER_URL|filename/, "the warning has to say which URL failed");
+    // Asserted against the handler, not the file. There is a second warning
+    // further down for failed frames, so a file-wide check would pass with this
+    // one deleted — which is the whole diagnostic gone.
+    //
+    // Either spelling: the engine warns through an injectable console so a test
+    // can capture it, and `console.warn` directly is equally valid.
+    assert.match(body, /\b(log|console)\.warn/, "a silent fallback is the bug, not the fix");
+    assert.match(body, /workerUrl|filename/i, "the warning has to say which URL failed");
   });
 
   it("leaves an edited file untouched and says which files it skipped", async () => {
