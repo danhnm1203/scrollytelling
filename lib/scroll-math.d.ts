@@ -110,11 +110,17 @@ export type GridSequence = SequenceShape & {
   readonly lumaGrid: readonly (readonly number[])[];
 };
 
-/** How visible a beat is at this scroll position, 0 to 1. Crossfades. */
+/**
+ * How visible a beat is at this scroll position, 0 to 1.
+ *
+ * Crossfades while the page is moving. `focus` is how far it has settled once
+ * the scroll stopped: 0 is the plain crossfade, 1 leaves exactly one beat lit.
+ */
 export declare function fadeOpacity(
   sections: readonly BeatShape[],
   index: number,
   progress: number,
+  focus?: number,
 ): number;
 
 /** Which part of the source frame is on screen, in 0..1 source coordinates. */

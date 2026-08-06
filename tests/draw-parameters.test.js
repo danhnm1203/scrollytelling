@@ -19,6 +19,7 @@ import {
   canvasSize,
   drawRect,
   blendFrames,
+  settleFocus,
   settlePosition,
   nearestDecoded,
   nextEased,
@@ -106,6 +107,47 @@ describe("settlePosition", () => {
     assert.equal(last.drawn, 59);
     const first = settlePosition({ drawn: 0, exact: 0, moving: false, ...ARGS });
     assert.equal(first.drawn, 0);
+  });
+});
+
+describe("settleFocus", () => {
+  const ARGS = { seconds: 0.25, deltaMs: 16 };
+
+  it("is zero while the scrub is moving", () => {
+    // The copy has to track a live scroll exactly. Anything else and a reader
+    // scrolling through the story sees the wrong beat for the trailing part of
+    // every handoff.
+    assert.deepEqual(settleFocus({ focus: 0.8, moving: true, ...ARGS }), {
+      focus: 0,
+      settling: false,
+    });
+  });
+
+  it("rises toward a single lit beat once the scroll stops", () => {
+    const step = settleFocus({ focus: 0, moving: false, ...ARGS });
+    assert.ok(step.focus > 0, `expected to have started, got ${step.focus}`);
+    assert.ok(step.focus < 1, `expected not to have arrived, got ${step.focus}`);
+    assert.equal(step.settling, true);
+  });
+
+  it("arrives, so the loop can stop", () => {
+    let focus = 0;
+    let settling = true;
+    let guard = 0;
+    while (settling && guard++ < 600) {
+      const step = settleFocus({ focus, moving: false, ...ARGS });
+      focus = step.focus;
+      settling = step.settling;
+    }
+    assert.ok(guard < 600, "never settled");
+    assert.equal(focus, 1, `stopped at ${focus}, so a second beat is still lit`);
+  });
+
+  it("does not animate when it is already resolved", () => {
+    assert.deepEqual(settleFocus({ focus: 1, moving: false, ...ARGS }), {
+      focus: 1,
+      settling: false,
+    });
   });
 });
 

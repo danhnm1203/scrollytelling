@@ -102,6 +102,14 @@ export declare function settlePosition(step: {
   totalFrames: number;
 }): { drawn: number; settling: boolean };
 
+/** How far the copy has resolved onto a single beat once the scroll stopped. */
+export declare function settleFocus(step: {
+  focus: number;
+  moving: boolean;
+  seconds: number;
+  deltaMs: number;
+}): { focus: number; settling: boolean };
+
 /** The two frames to composite, and how far between them the position sits. */
 export declare function blendFrames(at: {
   exact: number;

@@ -125,6 +125,49 @@ describe("fadeOpacity", () => {
     }
   });
 
+  it("leaves one beat lit and the rest dark once the page has settled", () => {
+    // Stopping between two beats leaves both part-lit, which is the state that
+    // reads as broken however short it is. Nothing is being handed over on a
+    // page nobody is scrolling, so the copy resolves onto whichever beat was
+    // already winning.
+    const mid = (0.3 + 0.6) / 2;
+    const lit = BEATS.map((_, i) => fadeOpacity(BEATS, i, mid, 1));
+    assert.deepEqual(lit, [0, 1, 0, 0]);
+  });
+
+  it("resolves onto the beat that was already dominant, not the nearest by index", () => {
+    const justPast = 0.58;
+    assert.equal(fadeOpacity(BEATS, 2, justPast, 1), 1);
+    assert.equal(fadeOpacity(BEATS, 1, justPast, 1), 0);
+  });
+
+  it("breaks an exact tie toward the earlier beat", () => {
+    // Arbitrary but fixed. Without a rule the copy flickers between two beats
+    // on a position that lands exactly between them.
+    const tie = [{ at: 0.4 }, { at: 0.6 }];
+    assert.equal(fadeOpacity(tie, 0, 0.5, 1), 1);
+    assert.equal(fadeOpacity(tie, 1, 0.5, 1), 0);
+  });
+
+  it("still sums to one part way through resolving", () => {
+    // The reason no scroll position is ever left with no copy on it. It has to
+    // hold during the resolve too, not only at either end of it.
+    for (const focus of [0, 0.25, 0.5, 0.75, 1]) {
+      for (const p of [0.35, 0.45, 0.55, 0.7, 0.85]) {
+        const total = BEATS.reduce((sum, _, i) => sum + fadeOpacity(BEATS, i, p, focus), 0);
+        assert.ok(Math.abs(total - 1) < 1e-9, `focus ${focus} at ${p} summed to ${total}`);
+      }
+    }
+  });
+
+  it("is the plain crossfade when nothing has settled", () => {
+    for (const p of [0.35, 0.45, 0.55]) {
+      BEATS.forEach((_, i) => {
+        assert.equal(fadeOpacity(BEATS, i, p, 0), fadeOpacity(BEATS, i, p));
+      });
+    }
+  });
+
   it("handles a single beat", () => {
     const one = [{ at: 0.5, align: "center" }];
     assert.equal(fadeOpacity(one, 0, 0), 1);
