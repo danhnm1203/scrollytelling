@@ -77,15 +77,24 @@ Start a new session and it is available as **`/scrollytelling`**.
 3. **Agree the page before building it.** One short design doc: the page flow, the
    visual language, and what each beat says. The scrubber is a hero, not a whole
    page — see "The page below the hero".
-4. `scrollytelling scaffold <project_dir>`
+4. `scrollytelling scaffold <project_dir> [--template <name>]` — `next` is the
+   default. `astro` and `html` also exist; `--template` with no name lists them.
+   Pick `html` when the page has to work with no build step at all.
 5. `cd <project_dir> && npm install` — only next/react/react-dom, so it is fast.
+   The `html` template skips this entirely: there is nothing to install.
 6. `scrollytelling frames <video> <project_dir> --frames 50 [--focus 0.5]`
    — read the luminance table it prints. `--focus` is where the portrait crop sits
    horizontally, 0 to 1; the subject is not always centred.
-7. Edit `components/story.ts`.
+7. Edit the story file — `components/story.js` on `next` and `html`,
+   `src/components/story.js` on `astro`. It is plain JavaScript with its types
+   in a sibling `.d.ts`, so your editor still catches a mistyped `align` and so
+   does the build.
 8. `scrollytelling frames --check <project_dir>` — per-beat readability warnings.
 9. Build the rest of the page.
-10. `npm run build && npm run start -- -p 3737`
+10. Build and serve it. `npm run build && npm run start -- -p 3737` on `next`,
+    `npm run build && npm run preview` on `astro`, and any static server on
+    `html` — module scripts and workers are same-origin, so `file://` will not
+    work there.
 11. **Measurement checkpoint** (below).
 12. Verify, then report.
 
@@ -110,7 +119,7 @@ definition, and scrubbing backwards is the same cost as forwards.
 
 ## The page below the hero
 
-`scaffold` gives you the scrubbing hero and an `sr-only` story outline. That is
+`scaffold` gives you the scrubbing hero and a visually hidden story outline. That is
 the mechanism, not the deliverable. A landing page needs sections under it, and
 they are yours to write. A flow that works:
 
@@ -128,12 +137,14 @@ Constraints that hold while you build it:
 - **Reuse the frames you already encoded** for static section imagery. They are
   in `public/frames/`, already sized and optimised. Pulling fresh stills with
   ffmpeg means shipping another copy of the same pixels.
-- **Keep `app/page.tsx`'s outline as the only `<h1>`.** Section headings are
+- **Keep the story outline as the only `<h1>`.** It lives in `app/page.tsx` on
+  `next`, `src/pages/index.astro` on `astro`, and `index.html` on `html`. Section headings are
   `<h2>`. The canvas is `aria-hidden` decoration; the outline is what a screen
   reader and a crawler actually read.
 - **Honour `prefers-reduced-motion`** in anything you add. The hero already does
-  — see below — and `globals.css` neutralises transitions and animations
-  page-wide in that mode, so a reveal wrapper inherits the right behaviour. What
+  — see below — and `lib/scroll-engine.css` neutralises transitions and
+  animations page-wide in that mode, so a reveal wrapper inherits the right
+  behaviour on every template. What
   it cannot do for you is content that moves without a CSS transition: a
   count-up, a carousel, an autoplaying video. Gate those yourself.
 - Server components by default. Only what listens to scroll is `"use client"`.
@@ -147,8 +158,8 @@ that had to be patched. Move `at`, add a beat, delete one — nothing else chang
 ## How the scrub is driven
 
 Native scroll, read in a `requestAnimationFrame` loop. The drawn position eases
-toward the scroll position over `SCRUB_SECONDS` (`components/ScrollSequence.tsx`,
-0.35 by default) rather than locking to it 1:1, which is what stops a coarse
+toward the scroll position over `SCRUB_SECONDS` (`lib/scroll-engine.mjs`, 0.35 by
+default) rather than locking to it 1:1, which is what stops a coarse
 sequence from stepping under a fast flick. The loop stops once it has caught up,
 so an idle page schedules no frames at all — verify that if you touch the loop:
 
@@ -176,14 +187,19 @@ Three things follow from this that are easy to get wrong:
 ## Reduced motion
 
 A visitor with `prefers-reduced-motion: reduce` does not get a slower scrub, they
-get a different page: one still, and the story outline from `app/page.tsx`
-promoted from screen-reader-only to the page itself. `ScrollSequence` starts no
-worker, decodes nothing, adds no scroll listener and renders no runway.
+get a different page: one still, and the story outline promoted from
+screen-reader-only to the page itself. The engine starts no worker, decodes
+nothing, adds no scroll listener and renders no runway.
 
 This is deliberate, and it costs the reader nothing — the outline is the same
-copy in the same order, which is the reason to keep it truthful as you edit
-`story.ts`. If you restyle it, keep the `story-outline` class: that is what the
-media query in `globals.css` hangs off.
+copy in the same order, which is the reason to keep it truthful as you edit the
+story. If you restyle it, keep the `story-outline` class: that is what the media
+query in `lib/scroll-engine.css` hangs off — the engine ships its own stylesheet
+so a template without Tailwind gets the same behaviour.
+
+On the `html` template the outline is regenerated from the story by `frames`,
+between the `scrollytelling:outline` markers in `index.html`. Edit the story, not
+the markup — anything between those markers is replaced.
 
 ## Keeping a generated project current
 
@@ -239,6 +255,8 @@ landscape sequence — the choice flips at a square viewport, not at a phone wid
    for(const x of r){if(x.type===4&&x.conditionText.includes('reduced-motion'))x.media.mediaText='all'}}
    return getComputedStyle(document.querySelector('.story-outline')).width})()"
    ```
-   A width of one pixel means the outline is still hidden and the media query is
-   losing to `sr-only`. A real width means it won. Screenshot it and read the
-   result: every beat should be there, in order, as prose.
+   A width of one pixel means the outline is still hidden — the media query is
+   losing to the base `.story-outline` rule. A real width means it won.
+   Screenshot it and read the result: every beat should be there, in order, as
+   prose. Both rules live in `lib/scroll-engine.css`, so this behaves the same
+   on every template.

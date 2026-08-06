@@ -138,6 +138,36 @@ You now have a normal Next.js project. `scaffold` never overwrites a file you
 have edited, so it is safe to re-run later — see
 [Keeping up with template fixes](#keeping-up-with-template-fixes).
 
+#### Other templates
+
+Next is the default. There are two others, and `--template` with no name lists
+them:
+
+```bash
+scrollytelling scaffold ./my-site --template astro
+scrollytelling scaffold ./my-site --template html
+```
+
+| Template | What you get |
+| --- | --- |
+| `next` | Next.js App Router with Tailwind. The default. |
+| `astro` | Astro. Ships no framework JavaScript, only the engine. |
+| `html` | Plain HTML and JavaScript. No build step, no dependencies, nothing to install. |
+
+All three run the **same engine**, copied into `lib/` at scaffold time — so a
+fix to the scrubbing is one change, not three. What differs is the fifty-odd
+lines that hand it a container, and where each framework expects files to live.
+
+Two things worth knowing about `html`: there is no `npm install` and no build,
+but the page does need a real HTTP server. Module scripts and web workers are
+same-origin only, so opening `index.html` from the filesystem will not work. And
+its story outline is regenerated from `components/story.js` by `frames` — edit
+the story, not the markup.
+
+The project remembers which template it came from, so later `frames` and
+`--diff` runs need no flag. Scaffolding a different template over an existing
+project is refused rather than leaving a tree that is neither.
+
 ### 3. Turn the clip into a measured frame sequence
 
 ```bash
@@ -145,7 +175,7 @@ scrollytelling frames ../clip.mp4 . --frames 50
 ```
 
 This extracts, measures and encodes. It writes the images to `public/frames/` and
-the contract they are described by to `components/frames.ts`, and prints a table
+the contract they are described by to `components/frames.js`, and prints a table
 like this:
 
 ```
@@ -168,10 +198,10 @@ the background pulses between frames; lower it if `public/frames/` gets heavy.
 
 ### 4. Write your beats, then check them
 
-Open `components/story.ts` — the only file you need to edit. Each beat declares
+Open `components/story.js` — the only file you need to edit. Each beat declares
 `at`, the scroll position from 0 to 1 where it should be clearest:
 
-```ts
+```js
 sections: [
   { at: 0.0,  align: "center", heading: "Orbit", body: "Scroll to take it apart." },
   { at: 0.3,  align: "left",   heading: "Nothing wasted", body: "…" },
@@ -247,7 +277,7 @@ fragments to anything that cannot see them. Under reduced motion that document
 stops being screen-reader-only and becomes the page itself — the same copy, in
 the same order, that everyone else scrolls through.
 
-The practical consequence: what you write in `components/story.ts` is the page
+The practical consequence: what you write in `components/story.js` is the page
 twice over. It is worth reading once as flat prose before you ship.
 
 ## CLI reference
@@ -289,11 +319,17 @@ installing *this* package fetches an ffmpeg binary (~80MB) once.
 my-site/
   app/                     page, layout, styles
   components/
-    story.ts               brand and copy beats — the only file you edit
-    frames.ts              generated; do not hand-edit
-    ScrollSequence.tsx     the mechanism
+    story.js               brand and copy beats — the only file you edit
+    story.d.ts             its types, so your editor still checks it
+    frames.js              generated; do not hand-edit
+    frames.d.ts            its types
+    ScrollSequence.tsx     the adapter — about sixty lines
+  lib/                     copied from this package at scaffold time
+    scroll-engine.mjs      the scrubbing engine, shared by every template
+    scroll-engine.css      its styles, themeable via custom properties
+    scroll-engine-state.mjs  the decisions it makes, pure and unit-tested
+    scroll-math.mjs        the primitives underneath
     decoder.worker.js      off-thread frame decoding
-  lib/scroll-math.mjs      copied from this package at scaffold time
   public/frames/           generated, committed
 ```
 

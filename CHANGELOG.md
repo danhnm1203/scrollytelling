@@ -5,6 +5,64 @@ Notable changes to `@danhnm1203/scrollytelling`.
 This file starts at 0.2.0. Earlier releases predate it and are not reconstructed
 here — inventing history is worse than admitting it was not kept.
 
+## 0.3.0
+
+Three templates instead of one, running the same engine.
+
+### Added
+
+- **`scaffold --template <name>`.** `next` is still the default; `astro` and
+  `html` are new, and `--template` with no name lists them. The project records
+  which one it came from, so later `frames` and `--diff` runs need no flag, and
+  scaffolding a different template over an existing project is refused rather
+  than leaving a tree that is neither.
+
+- **An Astro template.** Ships no framework JavaScript, only the engine.
+
+- **A zero-build HTML template.** No `package.json`, no `tsconfig`, no bundler,
+  nothing to install. It does need a real HTTP server: module scripts and web
+  workers are same-origin only, so `file://` will not work. Its story outline is
+  regenerated from `components/story.js` by `frames`, between markers in
+  `index.html` — edit the story, not the markup.
+
+### Changed
+
+- **The scrubbing runtime moved into `lib/`, shared by every template.** A fix
+  to the decode window, the easing or the scrim is now one change rather than
+  one per template. `ScrollSequence.tsx` went from 687 lines to about 135: the
+  engine owns the canvas, worker, decode window, animation frame, listeners,
+  reduced motion and the copy overlays, and the adapter hands it a container.
+
+- **The engine ships its own stylesheet**, keyed off data attributes and
+  themeable through custom properties (`--st-beat-heading-size`,
+  `--st-scrim-falloff`, and the rest). Restyling a beat no longer means editing
+  markup you no longer own. It also takes the story outline, which was
+  previously hidden by a Tailwind utility — so a template without Tailwind gets
+  the same behaviour.
+
+- **The frames contract and the story are now JavaScript with types beside
+  them** — `frames.js` + `frames.d.ts`, `story.js` + `story.d.ts`. A page with
+  no build step cannot import TypeScript, and those are exactly the files it has
+  to import. Editors and builds still check them: the templates that have a type
+  checker turn on `checkJs`, so a mistyped `align` still fails.
+
+  **Existing projects:** re-run `scrollytelling scaffold .` to pick up the new
+  files. It never overwrites anything you have edited, and
+  `scrollytelling scaffold . --diff` reports what moved. Your `story.ts` keeps
+  working until you switch; the generated contract is what changes name.
+
+### Fixed
+
+- **A page whose opening frames all decoded could report "no frames found".**
+  The opening request covers the whole decode window, but only about half of
+  those are opening frames, and readiness counted every failure so far.
+
+- **Web workers were not emitted by every bundler.** The engine constructed its
+  worker indirectly, and bundlers detect only the literal
+  `new Worker(new URL(..., import.meta.url))` form. Turbopack traced it anyway;
+  Vite did not, so an Astro build shipped no worker and fell back to
+  main-thread decoding with only a console warning.
+
 ## 0.2.0
 
 Two silent failures fixed, and the runtime's decisions moved somewhere they can
