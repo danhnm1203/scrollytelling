@@ -1,6 +1,6 @@
 {
-  "name": "scrollytelling",
-  "version": "0.1.0",
+  "name": "@danhnm1203/scrollytelling",
+  "version": "0.2.0",
   "description": "Turn a video into a scroll-scrubbed Next.js landing page. The clip plays frame by frame as the visitor scrolls.",
   "license": "MIT",
   "type": "module",
@@ -17,7 +17,8 @@
     "scripts",
     "templates",
     "skills",
-    ".claude-plugin"
+    ".claude-plugin",
+    "CHANGELOG.md"
   ],
   "engines": {
     "node": ">=20"
