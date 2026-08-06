@@ -24,11 +24,24 @@ import { mount } from "../lib/scroll-engine.mjs";
 
 /** The smallest element the engine can work against. */
 function el(tag = "div", attrs = {}) {
-  const node = {
+  const node = {}; 
+  Object.assign(node, {
     tagName: tag.toUpperCase(),
     children: [],
     dataset: {},
-    style: {},
+    style: {
+      setProperty(k, v) {
+        node.props[k] = v;
+      },
+      removeProperty(k) {
+        delete node.props[k];
+      },
+    },
+    className: "",
+    textContent: "",
+    // Custom properties land here, so a test can check the engine actually
+    // wrote the measured scrim strength rather than just creating the element.
+    props: {},
     attrs: { ...attrs },
     setAttribute(k, v) {
       this.attrs[k] = v;
@@ -70,7 +83,7 @@ function el(tag = "div", attrs = {}) {
     },
     addEventListener() {},
     removeEventListener() {},
-  };
+  });
   return node;
 }
 
@@ -151,7 +164,22 @@ const EDGES = [
 const SEQUENCES = [
   { id: "landscape", width: 1280, height: 720, totalFrames: 4, edgeColors: EDGES, lumaGrid: [] },
 ];
-const STORY = { brand: "x", title: "x", description: "x", sections: [] };
+const STORY = {
+  brand: "ORBIT",
+  title: "t",
+  description: "d",
+  sections: [
+    { at: 0, align: "left", heading: "First", body: "one" },
+    { at: 0.5, align: "center", anchor: "bottom", heading: "Second", body: "two" },
+    { at: 1, align: "right", heading: "Third", body: "three" },
+  ],
+};
+
+/** Every element in the tree, so assertions can look for a class anywhere. */
+function flatten(node) {
+  return node.children.flatMap((c) => [c, ...flatten(c)]);
+}
+const byClass = (root, cls) => flatten(root).filter((n) => (n.className ?? "").split(" ").includes(cls));
 const OPTS = () => ({
   sequences: SEQUENCES,
   story: STORY,
@@ -470,6 +498,183 @@ describe("mount — reaching ready", () => {
     const dispose = mount(container, { ...OPTS(), env });
 
     assert.ok(env.decodes.length > 0, "the opening window must be requested at mount");
+    dispose();
+  });
+});
+
+describe("mount — overlays", () => {
+  const settle = () => new Promise((r) => setTimeout(r, 0));
+
+  it("renders one overlay per beat", async () => {
+    const container = el();
+    const env = scrubbingEnvironment();
+    const dispose = mount(container, { ...OPTS(), env });
+    await settle();
+    env.paint();
+
+    assert.equal(byClass(container, "st-beat").length, STORY.sections.length);
+    dispose();
+  });
+
+  it("carries each beat's alignment and anchor as data, not as markup", async () => {
+    // The engine owns one set of markup; the stylesheet decides what left,
+    // centre, right and bottom-anchored look like. A template that restyles
+    // them does not have to re-render anything.
+    const container = el();
+    const env = scrubbingEnvironment();
+    const dispose = mount(container, { ...OPTS(), env });
+    await settle();
+    env.paint();
+
+    const beats = byClass(container, "st-beat");
+    assert.deepEqual(
+      beats.map((b) => b.dataset.align),
+      ["left", "center", "right"],
+    );
+    assert.equal(beats[1].dataset.anchor, "bottom");
+    dispose();
+  });
+
+  it("writes the measured scrim strength as a custom property", async () => {
+    // This is the product's whole thesis: the strength is measured per frame at
+    // build time and applied here. A beat that rendered without it would be
+    // white text on whatever the footage happens to be doing.
+    const container = el();
+    const env = scrubbingEnvironment();
+    const dispose = mount(container, { ...OPTS(), env });
+    await settle();
+    env.paint();
+
+    const scrims = byClass(container, "st-beat__scrim");
+    assert.ok(scrims.length > 0, "expected a scrim per beat");
+    assert.ok(
+      scrims.every((s) => "--st-scrim-opacity" in (s.props ?? {})),
+      "every scrim needs its measured opacity",
+    );
+    dispose();
+  });
+
+  it("puts the beat copy in the document", async () => {
+    const container = el();
+    const env = scrubbingEnvironment();
+    const dispose = mount(container, { ...OPTS(), env });
+    await settle();
+    env.paint();
+
+    const headings = byClass(container, "st-beat__heading").map((h) => h.textContent);
+    assert.deepEqual(headings, ["First", "Second", "Third"]);
+    dispose();
+  });
+
+  it("renders the progress bar and the scroll hint", async () => {
+    // The most common way one of these pages fails is a visitor looking at a
+    // static hero and leaving, never learning there was anything else.
+    const container = el();
+    const env = scrubbingEnvironment();
+    const dispose = mount(container, { ...OPTS(), env });
+    await settle();
+    env.paint();
+
+    assert.equal(byClass(container, "st-progress").length, 1);
+    assert.equal(byClass(container, "st-hint").length, 1);
+    dispose();
+  });
+
+  it("renders no overlays at all under reduced motion", async () => {
+    // No worker, no decode, no listener — and nothing fixed over the still.
+    const container = el();
+    const dispose = mount(container, OPTS());
+
+    assert.equal(byClass(container, "st-beat").length, 0);
+    assert.equal(byClass(container, "st-progress").length, 0);
+    dispose();
+  });
+
+  it("removes everything it rendered on dispose", async () => {
+    const container = el();
+    const env = scrubbingEnvironment();
+    const dispose = mount(container, { ...OPTS(), env });
+    await settle();
+    env.paint();
+    assert.ok(byClass(container, "st-beat").length > 0);
+
+    dispose();
+    assert.equal(byClass(container, "st-beat").length, 0, "overlays must not outlive the mount");
+    assert.equal(byClass(container, "st-progress").length, 0);
+  });
+});
+
+describe("mount — feedback during the opening decode", () => {
+  const settle = () => new Promise((r) => setTimeout(r, 0));
+
+  it("shows a percentage while the opening frames decode", () => {
+    // On a slow connection the alternative is a still image and no reason to
+    // wait. The CSS for this existed for a whole commit while nothing built it.
+    const container = el();
+    const env = scrubbingEnvironment();
+    const dispose = mount(container, { ...OPTS(), env });
+
+    const pill = byClass(container, "st-loading__pill")[0];
+    assert.ok(pill, "expected a loading indicator");
+    assert.match(pill.textContent, /%/);
+    dispose();
+  });
+
+  it("keeps the scrubbing chrome hidden until there is something to scrub", () => {
+    // A progress bar and a "Scroll" cue over a poster that cannot yet be
+    // scrolled through is worse than no chrome at all.
+    const container = el();
+    const env = scrubbingEnvironment();
+    const dispose = mount(container, { ...OPTS(), env });
+    env.paint();
+
+    assert.equal(byClass(container, "st-progress")[0].style.opacity, "0");
+    assert.equal(byClass(container, "st-hint")[0].style.opacity, "0");
+    dispose();
+  });
+
+  it("swaps the percentage for the chrome once ready", async () => {
+    const container = el();
+    const env = scrubbingEnvironment();
+    const dispose = mount(container, { ...OPTS(), env });
+    await settle();
+    env.paint();
+
+    assert.equal(byClass(container, "st-loading")[0].style.display, "none");
+    assert.equal(byClass(container, "st-progress")[0].style.opacity, "1");
+    dispose();
+  });
+
+  it("keeps the copy tracking the scroll even with no frame decoded", () => {
+    // The draw loop returns early when nothing is decoded. Painting the
+    // overlays after that return freezes the copy mid-scrub while the footage
+    // behind it keeps moving.
+    const container = el();
+    const env = scrubbingEnvironment();
+    const dispose = mount(container, { ...OPTS(), env });
+
+    env.paint();
+
+    const beats = byClass(container, "st-beat");
+    assert.ok(
+      beats.some((b) => b.style.opacity !== undefined && b.style.opacity !== ""),
+      "overlays must be positioned on every frame, not only drawable ones",
+    );
+    dispose();
+  });
+
+  it("warns rather than silently rendering a page with no copy", () => {
+    const container = el();
+    const env = scrubbingEnvironment();
+    const warnings = [];
+    env.console = { warn: (m) => warnings.push(m), info() {} };
+
+    const dispose = mount(container, { ...OPTS(), env, story: { sections: [] } });
+
+    assert.ok(
+      warnings.some((w) => /no story sections/i.test(w)),
+      "a wordless page should not be the one thing that happens quietly",
+    );
     dispose();
   });
 });

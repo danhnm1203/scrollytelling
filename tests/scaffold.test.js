@@ -88,6 +88,7 @@ describe("scaffold", () => {
       "lib/scroll-engine-state.d.ts",
       "lib/scroll-engine.mjs",
       "lib/scroll-engine.d.ts",
+      "lib/scroll-engine.css",
       // Must sit beside scroll-engine.mjs — the engine resolves it relative to
       // its own module URL, so splitting them 404s the worker.
       "lib/decoder.worker.js",
@@ -169,15 +170,21 @@ describe("scaffold", () => {
 
     // The engine owns the media query now; the adapter owns the outline.
     const engine = readFileSync(join(dir, "lib/scroll-engine.mjs"), "utf8");
-    const css = readFileSync(join(dir, "app/globals.css"), "utf8");
     const page = readFileSync(join(dir, "app/page.tsx"), "utf8");
 
+    // The engine decides; the engine stylesheet renders. globals.css no longer
+    // carries either, so a template without Tailwind still gets both.
+    const sheet = readFileSync(join(dir, "lib/scroll-engine.css"), "utf8");
+
     assert.match(engine, /prefers-reduced-motion: reduce/);
-    assert.match(css, /@media \(prefers-reduced-motion: reduce\)/);
+    assert.match(sheet, /@media \(prefers-reduced-motion: reduce\)/);
     // The outline has to be addressable from CSS for the media query to
     // promote it from screen-reader-only to the page itself.
     assert.match(page, /story-outline/);
-    assert.match(css, /\.story-outline/);
+    assert.match(sheet, /\.story-outline/);
+    // Exactly one hiding mechanism. Two, interacting by source order, is how
+    // the outline ends up visible on a page that should be scrubbing.
+    assert.ok(!/sr-only/.test(page), "the engine stylesheet hides the outline, not a utility class");
   });
 
   it("wires the decode worker to a failure handler", async () => {
@@ -223,6 +230,19 @@ describe("scaffold", () => {
     // can capture it, and `console.warn` directly is equally valid.
     assert.match(body, /\b(log|console)\.warn/, "a silent fallback is the bug, not the fix");
     assert.match(body, /workerUrl|filename/i, "the warning has to say which URL failed");
+  });
+
+  it("renders a poster the engine can adopt", async () => {
+    // The handshake the whole server-rendered-first-frame story rests on. The
+    // engine looks for this attribute and adopts the element instead of
+    // building its own; without it the page loses what it paints first, what a
+    // link preview shows, and what a no-JS visitor gets — on the server, where
+    // nothing would report it.
+    const dir = join(tempDir(), "site");
+    await runCapturing([dir]);
+
+    const adapter = readFileSync(join(dir, "components/ScrollSequence.tsx"), "utf8");
+    assert.match(adapter, /data-scrollytelling-poster/, "every adapter must render the poster");
   });
 
   it("leaves an edited file untouched and says which files it skipped", async () => {

@@ -1,0 +1,271 @@
+/*
+ * Everything the scrubbing engine draws, and the two rules that keep the page
+ * readable when it does not.
+ *
+ * Shipped as a file rather than injected by mount(): a stylesheet the project
+ * imports sits inside the cascade the project owns, so any of it can be
+ * overridden. Injected <style> would land last and win against the author.
+ *
+ * Every value worth changing is a custom property. Before the engine owned this
+ * markup, restyling a beat meant editing utility classes in your own component;
+ * that has to stay possible or the extraction is a downgrade. Set them anywhere
+ * that wins the cascade — :root, the container, a media query.
+ */
+
+:root {
+  /* Type */
+  --st-beat-heading-size: clamp(1.75rem, 4vw, 3rem);
+  --st-beat-body-size: clamp(1rem, 1.5vw, 1.125rem);
+  --st-beat-heading-color: rgb(255 255 255 / 0.9);
+  --st-beat-body-color: rgb(255 255 255 / 0.6);
+  --st-beat-max-width: 36rem;
+  --st-beat-gap: 0.75rem;
+
+  /* The dark backing behind copy. Its strength is measured per frame at build
+     time and applied at runtime; these only shape the falloff. */
+  --st-scrim-mid-stop: 45%;
+  --st-scrim-edge-stop: 75%;
+
+  /* Chrome */
+  --st-progress-height: 2px;
+  --st-progress-track: rgb(0 0 0 / 0.3);
+  --st-progress-fill: rgb(255 255 255 / 0.7);
+  --st-hint-tracking: 0.35em;
+  --st-hint-bg: rgb(0 0 0 / 0.45);
+  --st-hint-color: rgb(255 255 255 / 0.8);
+
+  --st-transition: 500ms;
+}
+
+/* --------------------------------------------------------------- overlays -- */
+
+/*
+ * One beat. Fixed rather than absolute so it stays put while the container
+ * scrolls past underneath — the copy holds while the footage moves.
+ */
+.st-beat {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  padding: 0 2rem;
+  pointer-events: none;
+  /* Set per beat by the engine from fadeOpacity. */
+  opacity: 0;
+}
+
+/* Hidden rather than merely transparent: a transparent overlay still sits in
+   the accessibility tree and still costs a compositor layer. */
+.st-beat[data-hidden="true"] {
+  visibility: hidden;
+}
+
+.st-beat[data-align="left"] {
+  align-items: center;
+  justify-content: flex-start;
+  text-align: left;
+}
+.st-beat[data-align="center"] {
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+.st-beat[data-align="right"] {
+  align-items: center;
+  justify-content: flex-end;
+  text-align: right;
+}
+
+/* Bottom-anchored copy sits under the subject rather than across it, so it
+   ignores horizontal alignment entirely — which is also why the build-time
+   readability check ignores `align` for these. */
+.st-beat[data-anchor="bottom"] {
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: 6rem;
+  text-align: center;
+}
+
+.st-beat__inner {
+  position: relative;
+  max-width: var(--st-beat-max-width);
+}
+
+/*
+ * A radial gradient rather than a blurred box.
+ *
+ * A blur spreads the computed opacity over a wide halo, so almost none of it
+ * lands behind the glyphs — the scrim measures correctly and then fails to
+ * deliver. This holds full strength across the text and falls off past it.
+ *
+ * --st-scrim-opacity is written per frame by the engine.
+ */
+.st-beat__scrim {
+  position: absolute;
+  inset: -2.5rem -3rem;
+  background: radial-gradient(
+    ellipse at center,
+    rgb(0 0 0 / var(--st-scrim-opacity, 0)) 0%,
+    rgb(0 0 0 / calc(var(--st-scrim-opacity, 0) * 0.85)) var(--st-scrim-mid-stop),
+    rgb(0 0 0 / 0) var(--st-scrim-edge-stop)
+  );
+}
+
+.st-beat__text {
+  position: relative;
+  display: grid;
+  gap: var(--st-beat-gap);
+}
+
+.st-beat__heading {
+  margin: 0;
+  font-size: var(--st-beat-heading-size);
+  font-weight: 500;
+  color: var(--st-beat-heading-color);
+}
+
+.st-beat__body {
+  margin: 0;
+  font-size: var(--st-beat-body-size);
+  line-height: 1.6;
+  color: var(--st-beat-body-color);
+}
+
+/* ---------------------------------------------------------------- chrome -- */
+
+/*
+ * Both of these carry their own dark backing rather than relying on the footage
+ * behind them. They sit outside the measured scrim, so over bright frames a
+ * plain white-on-transparent treatment disappears — and a scroll cue nobody can
+ * see is the same as no cue at all.
+ */
+.st-progress {
+  position: fixed;
+  inset: 0 0 auto 0;
+  height: var(--st-progress-height);
+  background: var(--st-progress-track);
+  pointer-events: none;
+}
+
+.st-progress__fill {
+  height: 100%;
+  width: 0;
+  background: var(--st-progress-fill);
+  transition: width 75ms linear;
+}
+
+.st-hint {
+  position: fixed;
+  inset: auto 0 2rem 0;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+  transition: opacity var(--st-transition);
+}
+
+.st-hint__pill {
+  margin: 0;
+  border-radius: 9999px;
+  padding: 0.5rem 1rem;
+  background: var(--st-hint-bg);
+  color: var(--st-hint-color);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: var(--st-hint-tracking);
+}
+
+.st-loading {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+
+.st-loading__pill {
+  margin: 0;
+  border-radius: 0.25rem;
+  padding: 0.25rem 0.75rem;
+  background: rgb(0 0 0 / 0.4);
+  color: rgb(255 255 255 / 0.7);
+  font-size: 0.875rem;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ------------------------------------------------------------- the story -- */
+
+/*
+ * The outline is load-bearing twice: it is what assistive technology reads, and
+ * it IS the page under reduced motion. Hidden here rather than by a framework's
+ * utility class, so a template without that framework still hides it — and so
+ * there is exactly ONE hiding mechanism. Two, interacting by source order, is
+ * how it ends up visible on a page that should be scrubbing.
+ */
+.story-outline {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/*
+ * Reduced motion.
+ *
+ * Scroll-scrubbing is motion driven by interaction, so it is turned off rather
+ * than slowed down: the engine renders a single still and never starts its
+ * decoder or its scroll listener.
+ *
+ * That would leave a page with no words on it, except the story is already
+ * written out as prose for screen readers. Here it stops being
+ * screen-reader-only and becomes the page — the same copy, in the same order,
+ * that everyone else scrolls through.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .story-outline {
+    position: static;
+    width: auto;
+    height: auto;
+    max-width: 42rem;
+    margin: 0 auto;
+    padding: 4rem 1.5rem;
+    overflow: visible;
+    clip-path: none;
+    white-space: normal;
+    display: grid;
+    gap: 2.5rem;
+  }
+
+  .story-outline h1 {
+    font-size: 1rem;
+    font-weight: 500;
+    letter-spacing: 0.35em;
+    text-transform: uppercase;
+    color: rgb(255 255 255 / 0.5);
+  }
+
+  .story-outline h2 {
+    font-size: clamp(1.75rem, 4vw, 2.5rem);
+    font-weight: 500;
+    color: rgb(255 255 255 / 0.9);
+  }
+
+  .story-outline p {
+    margin-top: 0.5rem;
+    color: rgb(255 255 255 / 0.6);
+    line-height: 1.6;
+  }
+
+  /* Whatever gets added to this page later is covered too. */
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

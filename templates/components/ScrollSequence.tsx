@@ -39,20 +39,10 @@
 
 import { useEffect, useRef, useState } from "react";
 
-import { SEQUENCES, framePath, type Sequence } from "@/components/frames";
-import { story, type Beat } from "@/components/story";
+import { SEQUENCES, framePath } from "@/components/frames";
+import { story } from "@/components/story";
 import { mount, type EngineState } from "@/lib/scroll-engine";
-import {
-  computeScale,
-  fadeOpacity,
-  frameIndex,
-  scrimOpacity,
-  scrollHeightVh,
-  visibleRect,
-} from "@/lib/scroll-math";
-
-/** Once someone has scrolled this far, they know the page scrolls. */
-const HINT_FADES_AT = 0.02;
+import { scrollHeightVh } from "@/lib/scroll-math";
 
 export function ScrollSequence() {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -81,7 +71,6 @@ export function ScrollSequence() {
   }, []);
 
   const reduced = state.phase === "reduced";
-  const ready = state.phase === "ready";
   const sequence = SEQUENCES[0];
 
   if (!sequence) return <NoFrames reason="empty" />;
@@ -120,130 +109,6 @@ export function ScrollSequence() {
         />
       </div>
 
-      {!reduced && !ready && state.phase === "loading" && (
-        <div className="pointer-events-none fixed inset-0 grid place-items-center">
-          <p className="rounded bg-black/40 px-3 py-1 text-sm text-white/70 tabular-nums">
-            {state.total ? Math.round((state.done / state.total) * 100) : 0}%
-          </p>
-        </div>
-      )}
-
-      {ready &&
-        story.sections.map((beat, i) => (
-          <BeatOverlay
-            key={beat.at}
-            beat={beat}
-            opacity={fadeOpacity(story.sections, i, state.progress)}
-            sequence={sequence}
-            frame={frameIndex(state.progress, sequence.totalFrames)}
-          />
-        ))}
-
-      {ready && <ScrollAffordance progress={state.progress} />}
-    </div>
-  );
-}
-
-/**
- * A progress line and a hint that the page responds to scrolling.
- *
- * The most common way one of these pages fails is a visitor looking at a static
- * hero and leaving, never learning there was anything else. The hint retires as
- * soon as they scroll, because by then it has done its job.
- */
-function ScrollAffordance({ progress }: Readonly<{ progress: number }>) {
-  return (
-    <>
-      {/*
-        Both of these carry their own dark backing rather than relying on the
-        footage behind them. They sit outside the measured scrim, so over bright
-        frames a plain white-on-transparent treatment disappears — and a scroll
-        cue nobody can see is the same as no cue at all.
-      */}
-      <div className="pointer-events-none fixed inset-x-0 top-0 h-0.5 bg-black/30">
-        <div
-          className="h-full bg-white/70 transition-[width] duration-75"
-          style={{ width: `${Math.round(progress * 100)}%` }}
-        />
-      </div>
-
-      <div
-        className="pointer-events-none fixed inset-x-0 bottom-8 flex justify-center transition-opacity duration-500"
-        style={{ opacity: progress > HINT_FADES_AT ? 0 : 1 }}
-      >
-        <p className="rounded-full bg-black/45 px-4 py-2 text-xs uppercase tracking-[0.35em] text-white/80">
-          Scroll
-        </p>
-      </div>
-    </>
-  );
-}
-
-/** Where a beat sits, given its alignment and anchor. */
-const PLACEMENT: Record<string, string> = {
-  left: "items-center justify-start text-left",
-  center: "items-center justify-center text-center",
-  right: "items-center justify-end text-right",
-};
-
-/**
- * One copy beat, with a backdrop sized to how bright the footage behind it is.
- *
- * The scrim is the whole point: white text at a fixed opacity stops being
- * readable the moment a frame brightens under it. Over dark footage this is
- * almost invisible and the image stays clean.
- */
-function BeatOverlay({
-  beat,
-  opacity,
-  sequence,
-  frame,
-}: Readonly<{
-  beat: Beat;
-  opacity: number;
-  sequence: Sequence;
-  frame: number;
-}>) {
-  const hidden = opacity <= 0.001;
-
-  const rect =
-    typeof window === "undefined"
-      ? { x0: 0, y0: 0, x1: 1, y1: 1 }
-      : visibleRect(
-          innerWidth,
-          innerHeight,
-          sequence,
-          computeScale(innerWidth, innerHeight, sequence),
-        );
-
-  const scrim = scrimOpacity(sequence, frame, beat, rect);
-  const bottom = beat.anchor === "bottom";
-
-  return (
-    <div
-      className={`pointer-events-none fixed inset-0 flex px-8 ${
-        bottom ? "items-end justify-center pb-24 text-center" : PLACEMENT[beat.align]
-      }`}
-      style={{ opacity, visibility: hidden ? "hidden" : "visible" }}
-    >
-      <div className="relative max-w-xl">
-        {/*
-          A radial gradient rather than a blurred box. A blur spreads the
-          computed opacity over a wide halo, so almost none of it lands behind
-          the glyphs — the scrim measures correctly and then fails to deliver.
-          This holds full strength across the text and falls off past it.
-        */}
-        <div
-          className="absolute -inset-x-12 -inset-y-10"
-          style={{
-            background: `radial-gradient(ellipse at center, rgb(0 0 0 / ${scrim}) 0%, rgb(0 0 0 / ${scrim * 0.85}) 45%, rgb(0 0 0 / 0) 75%)`,
-          }}
-        />
-        <div className="relative space-y-3">
-          <h2 className="text-3xl font-medium text-white/90 sm:text-5xl">{beat.heading}</h2>
-          <p className="text-base text-white/60 sm:text-lg">{beat.body}</p>
-        </div>
-      </div>
     </div>
   );
 }

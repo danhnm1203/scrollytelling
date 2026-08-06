@@ -5,6 +5,7 @@ import { SEQUENCES, framePath } from "@/components/frames";
 import { story } from "@/components/story";
 
 import "./globals.css";
+import "@/lib/scroll-engine.css";
 
 // Self-hosted by next/font, so the page makes no network request for it.
 const inter = Inter({ subsets: ["latin"], display: "swap" });

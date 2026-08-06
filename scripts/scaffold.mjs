@@ -62,6 +62,7 @@ const EXTRA_FILES = [
   ["../lib/scroll-engine-state.d.ts", "lib/scroll-engine-state.d.ts"],
   ["../lib/scroll-engine.mjs", "lib/scroll-engine.mjs"],
   ["../lib/scroll-engine.d.ts", "lib/scroll-engine.d.ts"],
+  ["../lib/scroll-engine.css", "lib/scroll-engine.css"],
   // Must land beside scroll-engine.mjs: the engine locates it with
   // `new URL("./decoder.worker.js", import.meta.url)`, which resolves relative
   // to the module holding the literal. Split them and the worker 404s.
