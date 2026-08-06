@@ -178,6 +178,29 @@ fade through each other into mush. `align` moves a beat across the frame and
 neighbours still need different `align` values to separate. `frames --check`
 reads the same two bands, so what it reports is where the copy actually is.
 
+## Snapping, and the one rule it imposes on your layout
+
+The page comes to rest on a beat. The engine puts a snap anchor at each one and
+`scroll-snap-type: y mandatory` does the rest — the browser owns the gesture,
+nothing writes to `scrollY`, so this does not fight native scroll, scroll
+anchoring or the keyboard. Beats are pulled onto whole frames first, so the
+frame you land on is one frame rather than two composited, with nothing left to
+correct after you stop.
+
+**Put your sections after the runway, as its siblings.** Every template already
+does, and the stylesheet makes `[data-scrollytelling-runway] ~ *` a snap point
+for exactly that reason. Mandatory snapping means the page must always rest on
+one, so a section nested somewhere the rule cannot reach has nowhere legal to
+stop — the browser drags the reader back to the last beat and everything below
+the hero becomes unreachable. Nothing errors; the page just refuses to scroll
+past the hero.
+
+Turn it off with `data-scrollytelling-snap="off"` on the `html` element. Do that
+if readers should be able to stop between beats, or if your layout cannot put
+its sections beside the runway. Reduced motion turns it off on its own — there
+is no scrub to snap through, and snapping someone who asked for less motion is
+the opposite of what they asked for.
+
 Do not give beats explicit fade windows. A beat declares only `at`; the crossfade
 is derived from where its neighbours sit, so the opacities always sum to 1 and no
 scroll position is ever left with no copy on it. The hand-built page mentioned

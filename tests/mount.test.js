@@ -217,6 +217,84 @@ const OPTS = () => ({
   env: environment(),
 });
 
+/**
+ * The snap anchors.
+ *
+ * One zero-size element per beat, inside the runway, at that beat's scroll
+ * position. The browser owns the gesture from there — the engine never writes
+ * to scrollY, which is what keeps this from fighting native scroll, scroll
+ * anchoring, or the keyboard.
+ *
+ * Placed against the ALIGNED beat positions. An anchor that lands mid-frame
+ * would put the reader somewhere the picture then has to correct itself, which
+ * is the one thing an anchor exists to avoid.
+ */
+describe("mount — snap anchors", () => {
+  const anchorsIn = (runway) => byClass(runway, "st-anchor");
+
+  it("emits one anchor per beat, inside the runway", () => {
+    const container = el();
+    const env = environment({ reduced: false });
+    const runway = runwayAround(container, env);
+
+    const dispose = mount(container, { ...OPTS(), env });
+    assert.equal(anchorsIn(runway).length, STORY.sections.length);
+    dispose();
+  });
+
+  it("places them on whole frames, not on the authored positions", () => {
+    // STORY beats sit at 0, 0.5 and 1 of a four-frame sequence, so 0.5 lands on
+    // frame 1.5 — exactly the mid-frame case this exists to remove. Aligned, it
+    // is frame 2 of 3, which is 0.6667.
+    const container = el();
+    const env = environment({ reduced: false });
+    const runway = runwayAround(container, env);
+
+    const dispose = mount(container, { ...OPTS(), env });
+    const tops = anchorsIn(runway).map((a) => a.style.top);
+    assert.equal(tops[0], "calc((100% - 100vh) * 0)");
+    assert.match(tops[1], /0\.6666/, `middle anchor at ${tops[1]}`);
+    assert.equal(tops[2], "calc((100% - 100vh) * 1)");
+    dispose();
+  });
+
+  it("removes them again on dispose", () => {
+    // They live in the adapter's runway, not in the engine's container, so
+    // nothing else is going to clean them up.
+    const container = el();
+    const env = environment({ reduced: false });
+    const runway = runwayAround(container, env);
+
+    const dispose = mount(container, { ...OPTS(), env });
+    assert.ok(anchorsIn(runway).length > 0);
+    dispose();
+    assert.equal(anchorsIn(runway).length, 0);
+  });
+
+  it("emits none under reduced motion", () => {
+    // There is no scrub and no runway to snap through: the page is the outline
+    // and one still. Snap points would be resting places in an empty column.
+    const container = el();
+    const env = environment({ reduced: true });
+    const runway = runwayAround(container, env);
+
+    const dispose = mount(container, { ...OPTS(), env });
+    assert.equal(anchorsIn(runway).length, 0);
+    dispose();
+  });
+
+  it("emits none when there is no runway to put them in", () => {
+    // Scrubbing against the document still works; snapping cannot, because
+    // there is nothing whose height the anchor offsets could be a fraction of.
+    const container = el();
+    const env = environment({ reduced: false });
+
+    const dispose = mount(container, { ...OPTS(), env });
+    assert.equal(byClass(container, "st-anchor").length, 0);
+    dispose();
+  });
+});
+
 describe("mount — poster adoption", () => {
   it("adopts a poster the adapter server-rendered", () => {
     // The whole point. An imperative mount that emptied the container would

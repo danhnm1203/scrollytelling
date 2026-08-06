@@ -244,6 +244,57 @@
  * screen-reader-only and becomes the page — the same copy, in the same order,
  * that everyone else scrolls through.
  */
+/*
+ * Snapping the hero to its beats.
+ *
+ * Each anchor is a zero-size element the engine put at one beat's scroll
+ * position, on a whole frame. `mandatory` is what makes the page always come to
+ * rest on one: `proximity` never fires at these distances, because the gap
+ * between two beats is most of a runway and far outside any browser's proximity
+ * threshold.
+ *
+ * The rule under it is not optional. `mandatory` means the scroller must always
+ * rest on a snap point, so with snap points only inside the hero there is
+ * nowhere legal to stop below it and the browser drags the reader back to the
+ * last anchor — every section, table and footer under the hero becomes
+ * unreachable. Mandatory snapping is a whole-page commitment, so the siblings
+ * after the runway become snap points too. That is the page below the hero, in
+ * every template: the adapter renders its sections next to the runway, not
+ * inside it.
+ *
+ * Opt out with `data-scrollytelling-snap="off"` on the html element. There has
+ * to be an escape hatch: a page whose author wants readers to stop between
+ * beats cannot get one back any other way, and a layout that puts its sections
+ * somewhere other than beside the runway would otherwise trap them with no
+ * warning.
+ */
+html:not([data-scrollytelling-snap="off"]) {
+  scroll-snap-type: y mandatory;
+}
+
+.st-anchor {
+  position: absolute;
+  left: 0;
+  width: 1px;
+  height: 1px;
+  pointer-events: none;
+  scroll-snap-align: start;
+}
+
+/*
+ * The anchors resolve `top` against this. Without it `100%` is the viewport and
+ * every anchor collapses onto the top of the runway — all five beats snapping
+ * to the same place, which looks like snapping that simply does not work.
+ * Relative positioning does not disturb the sticky hero inside it.
+ */
+[data-scrollytelling-runway] {
+  position: relative;
+}
+
+html:not([data-scrollytelling-snap="off"]) [data-scrollytelling-runway] ~ * {
+  scroll-snap-align: start;
+}
+
 @media (prefers-reduced-motion: reduce) {
   /*
    * The runway is scroll distance for a scrub that is not going to happen.
@@ -257,6 +308,14 @@
    * `!important` because the height is an inline style on the runway and the
    * poster, written by the adapter on the server. Nothing else beats those.
    */
+  /*
+   * No scrub, no runway, so no resting places to snap between — and snapping
+   * a reader who asked for less motion is the opposite of what they asked for.
+   */
+  html {
+    scroll-snap-type: none !important;
+  }
+
   [data-scrollytelling-runway] {
     height: auto !important;
   }
