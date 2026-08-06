@@ -8,7 +8,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { fadeOpacity, visibleRect, scrimOpacity } from "../lib/scroll-math.mjs";
+import { alignBeats, fadeOpacity, visibleRect, scrimOpacity } from "../lib/scroll-math.mjs";
 
 const BEATS = [
   { at: 0.0, align: "center" },
@@ -33,6 +33,76 @@ const sequenceWith = (grid) => ({
   height: 720,
   totalFrames: 1,
   lumaGrid: [grid],
+});
+
+/**
+ * Putting each beat on a whole frame.
+ *
+ * A beat is where a reader stops, and `at` is authored against the footage
+ * rather than against the frame grid — so it lands mid-frame, and the picture
+ * has to shift onto a whole frame after the reader has already stopped. On this
+ * story that shift is nearly half a frame at the last beat. Moving the beat
+ * instead removes the correction rather than animating it.
+ */
+describe("alignBeats", () => {
+  const frameOf = (at, totalFrames) => at * (totalFrames - 1);
+
+  it("puts every beat on a whole frame", () => {
+    const beats = [{ at: 0 }, { at: 0.26 }, { at: 0.52 }, { at: 0.76 }, { at: 0.94 }];
+    for (const beat of alignBeats(beats, 59)) {
+      const frame = frameOf(beat.at, 59);
+      assert.ok(Math.abs(Math.round(frame) - frame) < 1e-9, `${beat.at} sits at frame ${frame}`);
+    }
+  });
+
+  it("moves a beat by less than half a frame", () => {
+    // The copy was placed against the footage. Alignment is a correction, not a
+    // relocation — at 59 frames half a frame is under 1% of the sequence.
+    const beats = [{ at: 0.26 }, { at: 0.94 }];
+    alignBeats(beats, 59).forEach((beat, i) => {
+      const moved = Math.abs(beat.at - beats[i].at) * 58;
+      assert.ok(moved <= 0.5 + 1e-9, `beat ${i} moved ${moved} frames`);
+    });
+  });
+
+  it("keeps everything else about a beat", () => {
+    const beats = [{ at: 0.3, align: "left", anchor: "bottom", heading: "x" }];
+    const [out] = alignBeats(beats, 59);
+    assert.equal(out.align, "left");
+    assert.equal(out.anchor, "bottom");
+    assert.equal(out.heading, "x");
+  });
+
+  it("leaves the ends exactly at the ends", () => {
+    // 0 and 1 are the first and last frame already, and nudging them would
+    // leave scroll at the very top or bottom outside every beat's window.
+    const [first, last] = alignBeats([{ at: 0 }, { at: 1 }], 59);
+    assert.equal(first.at, 0);
+    assert.equal(last.at, 1);
+  });
+
+  it("never collapses two beats onto one position", () => {
+    // Two beats at the same `at` divide by a zero-width window, and the second
+    // would be unreachable. A short sequence with close beats is exactly when
+    // rounding would do it.
+    const crowded = [{ at: 0.4 }, { at: 0.42 }, { at: 0.44 }];
+    const out = alignBeats(crowded, 10);
+    const positions = out.map((b) => b.at);
+    assert.equal(new Set(positions).size, positions.length, `collided: ${positions}`);
+  });
+
+  it("keeps beats in the order they were written", () => {
+    const out = alignBeats([{ at: 0.4 }, { at: 0.42 }, { at: 0.44 }], 10);
+    for (let i = 1; i < out.length; i++) {
+      assert.ok(out[i].at > out[i - 1].at, `beat ${i} at ${out[i].at} is not after ${out[i - 1].at}`);
+    }
+  });
+
+  it("does nothing to a sequence with no frames to align to", () => {
+    const beats = [{ at: 0.37 }];
+    assert.deepEqual(alignBeats(beats, 1), beats);
+    assert.deepEqual(alignBeats(beats, 0), beats);
+  });
 });
 
 describe("fadeOpacity", () => {

@@ -110,6 +110,12 @@ export type GridSequence = SequenceShape & {
   readonly lumaGrid: readonly (readonly number[])[];
 };
 
+/** The same beats, each moved onto the nearest whole frame. */
+export declare function alignBeats<T extends BeatShape>(
+  sections: readonly T[],
+  totalFrames: number,
+): readonly T[];
+
 /**
  * How visible a beat is at this scroll position, 0 to 1.
  *
