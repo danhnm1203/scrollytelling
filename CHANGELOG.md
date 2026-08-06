@@ -5,6 +5,53 @@ Notable changes to `@danhnm1203/scrollytelling`.
 This file starts at 0.2.0. Earlier releases predate it and are not reconstructed
 here — inventing history is worse than admitting it was not kept.
 
+## 0.4.1
+
+### Fixed
+
+Four defects, all of which only appear once the page is more than the hero.
+Found by building a real landing page on the Astro template.
+
+- **The end of the sequence was unreachable.** Progress came from the document's
+  height, which is the runway's height only on a page that is nothing but the
+  hero. With sections below it the hero unstuck at around 63% of the document,
+  so the last third of the frames never drew and the final beat never appeared.
+  The engine now measures the runway — the element marked
+  `data-scrollytelling-runway`, which every template renders — and falls back to
+  the document only when there is none, saying so in the console rather than
+  losing the tail of a sequence quietly. `runwayProgress` and `runwayScrollTop`
+  are the new pure functions; `SCROLL_MATH_VERSION` is `1.2.0`.
+
+- **The overlays escaped the hero.** Beats, the progress bar, the scroll hint and
+  the loading pill were fixed to the viewport, so scrolling past the hero left
+  the last heading sitting across whatever came next. They are absolute inside
+  the sticky container now, and end where it ends.
+
+- **Rotating the phone moved the reader.** The restore after a resize used the
+  document formula too, so a visitor half way through the story came out of the
+  rotation somewhere else in it.
+
+- **`anchor: "bottom"` ignored `align`.** Bottom-anchored beats were centred
+  regardless, so two of them in a row crossfaded on top of each other with no
+  way to separate them from the story file. `align` now places them
+  horizontally, and both the runtime scrim and `frames --check` read the band
+  the copy actually occupies.
+
+Also: under reduced motion the runway now collapses. A server-rendered template
+sizes it before it can know the setting, which left a reduced-motion visitor
+with the story as prose followed by several screens of dead scroll under a stuck
+image.
+
+**Existing projects:** these fixes are in the engine your project carries a copy
+of, so re-run `scrollytelling scaffold .` to take them —
+`scrollytelling scaffold . --diff` reports what moved, and neither overwrites a
+file you have edited. That last part matters here: the page markup gained
+`data-scrollytelling-runway` on the element the hero sticks inside, and if you
+have edited that file, adding the attribute is the one change you have to make
+by hand. Without it the page keeps scrubbing against the document, which is only
+correct while the hero is the whole page — the engine now says so in the console
+when it happens.
+
 ## 0.4.0
 
 ### Added

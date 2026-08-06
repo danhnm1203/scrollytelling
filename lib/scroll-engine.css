@@ -40,13 +40,24 @@
 /* --------------------------------------------------------------- overlays -- */
 
 /*
- * One beat. Fixed rather than absolute so it stays put while the container
- * scrolls past underneath — the copy holds while the footage moves.
+ * One beat.
+ *
+ * Absolute inside the container, NOT fixed to the viewport. The container is
+ * sticky, so while the hero is on screen the two look identical — and they stop
+ * looking identical the moment the page has anything below the hero. A fixed
+ * overlay belongs to the viewport rather than to the hero, so it keeps floating
+ * over whatever comes next: the last heading sitting across a pricing table,
+ * with the footage it was written for scrolled away above it.
+ *
+ * This relies on the container being a positioned element. Every template makes
+ * it `position: sticky`, which is one; a hand-written page that does not will
+ * see the overlays escape to whichever ancestor is.
  */
 .st-beat {
-  position: fixed;
+  position: absolute;
   inset: 0;
   display: flex;
+  align-items: center;
   padding: 0 2rem;
   pointer-events: none;
   /* Set per beat by the engine from fadeOpacity. */
@@ -59,30 +70,35 @@
   visibility: hidden;
 }
 
+/*
+ * Where a beat sits. `align` places it across the frame, `anchor` down it, and
+ * the two are independent — that independence is load-bearing.
+ *
+ * Beats crossfade, so any two neighbours are on screen together for the whole
+ * handoff. What keeps that readable rather than a double exposure is that they
+ * are in different places. When `anchor: "bottom"` forced its own centring, two
+ * bottom-anchored neighbours fell into the same box and faded through each
+ * other — legible in neither state, and impossible to fix from the story file,
+ * because `align` was the knob and it did nothing.
+ */
 .st-beat[data-align="left"] {
-  align-items: center;
   justify-content: flex-start;
   text-align: left;
 }
 .st-beat[data-align="center"] {
-  align-items: center;
   justify-content: center;
   text-align: center;
 }
 .st-beat[data-align="right"] {
-  align-items: center;
   justify-content: flex-end;
   text-align: right;
 }
 
-/* Bottom-anchored copy sits under the subject rather than across it, so it
-   ignores horizontal alignment entirely — which is also why the build-time
-   readability check ignores `align` for these. */
+/* Under the subject rather than across it. Horizontal placement still comes
+   from `align` above, and scrimOpacity reads the same two bands. */
 .st-beat[data-anchor="bottom"] {
   align-items: flex-end;
-  justify-content: center;
   padding-bottom: 6rem;
-  text-align: center;
 }
 
 .st-beat__inner {
@@ -137,9 +153,13 @@
  * behind them. They sit outside the measured scrim, so over bright frames a
  * plain white-on-transparent treatment disappears — and a scroll cue nobody can
  * see is the same as no cue at all.
+ *
+ * Absolute inside the container for the same reason the beats are: this chrome
+ * reports the hero's progress, so it has to end where the hero ends rather than
+ * ride the viewport down over the rest of the page.
  */
 .st-progress {
-  position: fixed;
+  position: absolute;
   inset: 0 0 auto 0;
   height: var(--st-progress-height);
   background: var(--st-progress-track);
@@ -154,7 +174,7 @@
 }
 
 .st-hint {
-  position: fixed;
+  position: absolute;
   inset: auto 0 2rem 0;
   display: flex;
   justify-content: center;
@@ -174,7 +194,7 @@
 }
 
 .st-loading {
-  position: fixed;
+  position: absolute;
   inset: 0;
   display: grid;
   place-items: center;
@@ -225,6 +245,35 @@
  * that everyone else scrolls through.
  */
 @media (prefers-reduced-motion: reduce) {
+  /*
+   * The runway is scroll distance for a scrub that is not going to happen.
+   *
+   * A server-rendered template sizes it before it can know the setting — the
+   * height is in the HTML, and the media query is the only thing that ever
+   * learns. Left alone, a visitor who asked for less motion gets the story as
+   * prose and then seven screens of nothing under a stuck image: the one page
+   * on the site with a scroll that does nothing.
+   *
+   * `!important` because the height is an inline style on the runway and the
+   * poster, written by the adapter on the server. Nothing else beats those.
+   */
+  [data-scrollytelling-runway] {
+    height: auto !important;
+  }
+
+  [data-scrollytelling] {
+    position: static !important;
+    height: auto !important;
+  }
+
+  /* The still, at its own size, below the prose — rather than a cropped fill
+     of a viewport-high box that is no longer there. */
+  [data-scrollytelling-poster] {
+    position: static !important;
+    inset: auto !important;
+    height: auto !important;
+  }
+
   .story-outline {
     position: static;
     width: auto;

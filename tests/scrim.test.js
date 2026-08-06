@@ -190,6 +190,27 @@ describe("scrimOpacity", () => {
     assert.ok(overBottomLit > overTopLit, `${overBottomLit} should exceed ${overTopLit}`);
   });
 
+  it("reads the aligned side of the frame for a bottom-anchored beat", () => {
+    // Two bottom-anchored beats no longer share one box: `align` moves them
+    // apart horizontally, so the scrim has to follow them there. Reading full
+    // width would average in footage the copy does not sit on — which is how a
+    // beat over a dark corner gets the scrim of the bright one beside it.
+    const seq = sequenceWith(brightColumns([0, 1]));
+    const left = scrimOpacity(seq, 0, beat("left", "bottom"), whole);
+    const right = scrimOpacity(seq, 0, beat("right", "bottom"), whole);
+    assert.ok(left > right, `left ${left} should exceed right ${right}`);
+  });
+
+  it("still reads the lower half whatever the alignment", () => {
+    const bottomLit = sequenceWith(brightRows([3]));
+    const topLit = sequenceWith(brightRows([0]));
+    for (const align of ["left", "center", "right"]) {
+      const low = scrimOpacity(bottomLit, 0, beat(align, "bottom"), whole);
+      const high = scrimOpacity(topLit, 0, beat(align, "bottom"), whole);
+      assert.ok(low > high, `${align}: ${low} should exceed ${high}`);
+    }
+  });
+
   it("ignores cells that are cropped off screen", () => {
     // Only the outermost columns are bright. When the sides are cropped away
     // those pixels are not on screen, so a centred beat must not react to them.

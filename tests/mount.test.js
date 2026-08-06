@@ -81,10 +81,35 @@ function el(tag = "div", attrs = {}) {
       };
       return walk(this);
     },
+    closest(selector) {
+      const want = selector.replace(/[[\]]/g, "");
+      for (let n = this; n; n = n.parent) {
+        if (n.attrs[want] !== undefined) return n;
+      }
+      return null;
+    },
     addEventListener() {},
     removeEventListener() {},
   });
+  const append = node.appendChild;
+  node.appendChild = (child) => {
+    child.parent = node;
+    return append.call(node, child);
+  };
   return node;
+}
+
+/**
+ * Wraps a container in the runway its adapter renders around it.
+ *
+ * The runway is the tall element the hero sticks inside, and it is what the
+ * sequence is scrubbed against. Tests that omit it are testing the fallback.
+ */
+function runwayAround(container, env, { top = 0, height = 5000 } = {}) {
+  const runway = el("div", { "data-scrollytelling-runway": "" });
+  runway.getBoundingClientRect = () => ({ top: top - env.scrollY, height });
+  runway.appendChild(container);
+  return runway;
 }
 
 /** Enough of a window for mount() to decide it has nothing to do. */
@@ -127,6 +152,11 @@ function scrubbingEnvironment() {
   env.document.body = { scrollHeight: 5000 };
   env.scrollY = 0;
   env.scrollTo = () => {};
+  // Collected rather than printed. Most of these tests mount a bare container
+  // with no runway around it, which the engine is right to complain about —
+  // and test output is not the place for it.
+  env.warnings = [];
+  env.console = { warn: (m) => env.warnings.push(m), info() {} };
   // Resolves immediately so a test can drive the load through to ready.
   // `decodes` counts them, which is how "did it actually fetch anything"
   // becomes checkable.
@@ -338,6 +368,167 @@ describe("mount — viewport changes", () => {
     while (frames.length) frames.shift()();
 
     assert.ok(scrolledTo, "expected the scroll position to be restored");
+    dispose();
+  });
+});
+
+describe("mount — what the sequence is scrubbed against", () => {
+  const settle = () => new Promise((r) => setTimeout(r, 0));
+
+  /** The progress the engine last reported, i.e. what it would draw. */
+  const drivePaint = async (container, env, states) => {
+    await settle();
+    env.paint();
+    return states.filter((s) => s.phase === "ready").at(-1)?.progress;
+  };
+
+  it("reaches the end of the sequence with page below the hero", async () => {
+    // The defect. Progress used to come from the document, which is only the
+    // same thing when the runway IS the page. Add a features section and the
+    // hero unsticks long before the document ends, so the last third of the
+    // footage is unreachable — silently, because nothing errors and the
+    // sequence just stops early.
+    const container = el();
+    const env = scrubbingEnvironment();
+    // 5000 of runway starting 1000 down, inside a 20000 document.
+    env.document.body = { scrollHeight: 20000 };
+    runwayAround(container, env, { top: 1000, height: 5000 });
+    // Scrolled to the last pixel before the hero unsticks.
+    env.scrollY = 1000 + (5000 - env.innerHeight);
+
+    const states = [];
+    const dispose = mount(container, { ...OPTS(), env, onState: (s) => states.push(s) });
+
+    assert.equal(await drivePaint(container, env, states), 1);
+    dispose();
+  });
+
+  it("is 0 at the top of the runway, not at the top of the document", async () => {
+    // A hero placed below a header would otherwise start part-way in.
+    const container = el();
+    const env = scrubbingEnvironment();
+    env.document.body = { scrollHeight: 20000 };
+    runwayAround(container, env, { top: 1000, height: 5000 });
+    env.scrollY = 1000;
+
+    const states = [];
+    const dispose = mount(container, { ...OPTS(), env, onState: (s) => states.push(s) });
+
+    assert.equal(await drivePaint(container, env, states), 0);
+    dispose();
+  });
+
+  it("falls back to the document when there is no runway", async () => {
+    // A hand-written page may not mark one. Scrubbing against the document is
+    // wrong the moment anything sits below the hero, but it is right for a
+    // page that is only the hero — and it is better than not scrubbing.
+    const container = el();
+    const env = scrubbingEnvironment();
+    env.document.body = { scrollHeight: 5000 };
+    env.scrollY = 5000 - env.innerHeight;
+
+    const states = [];
+    const dispose = mount(container, { ...OPTS(), env, onState: (s) => states.push(s) });
+
+    assert.equal(await drivePaint(container, env, states), 1);
+    dispose();
+  });
+
+  it("says so when there is no runway to scrub against", async () => {
+    // The fallback is correct for a page that is only the hero and wrong for
+    // every other page, and the difference is invisible until someone notices
+    // the sequence never reaches its last frame.
+    const container = el();
+    const env = scrubbingEnvironment();
+
+    const dispose = mount(container, { ...OPTS(), env });
+
+    assert.equal(env.warnings.length, 1, `expected one warning, got ${env.warnings}`);
+    assert.match(env.warnings[0], /data-scrollytelling-runway/);
+    dispose();
+  });
+
+  it("does not complain when the adapter marked one", async () => {
+    const container = el();
+    const env = scrubbingEnvironment();
+    runwayAround(container, env, { top: 0, height: 5000 });
+
+    const dispose = mount(container, { ...OPTS(), env });
+
+    assert.deepEqual(env.warnings, []);
+    dispose();
+  });
+
+  it("leaves the scroll alone when the reader is past the hero", async () => {
+    // Progress is unbounded outside the runway. Restoring it there would take
+    // someone reading a section further down the page and drop them back into
+    // a hero they had already scrolled off.
+    const container = el();
+    const env = scrubbingEnvironment();
+    let resize = () => {};
+    env.addEventListener = (type, fn) => {
+      if (type === "resize") resize = fn;
+    };
+    env.document.body = { scrollHeight: 20000 };
+    runwayAround(container, env, { top: 0, height: 5000 });
+
+    const states = [];
+    const dispose = mount(container, { ...OPTS(), env, onState: (s) => states.push(s) });
+
+    // Well past the end of the runway, reading the rest of the page.
+    env.scrollY = 12000;
+    await drivePaint(container, env, states);
+
+    let scrolledTo = null;
+    env.scrollTo = (o) => {
+      scrolledTo = o;
+    };
+    resize();
+    env.paint();
+    env.paint();
+
+    assert.equal(scrolledTo, null, "the reader was outside the story; leave them there");
+    dispose();
+  });
+
+  it("restores the reader's place in the runway after a resize", async () => {
+    // Rotation changes both the runway's height and where it starts. The old
+    // scroll offset means something different afterwards, so the restore has
+    // to measure the new layout — the document formula moved the reader from
+    // 0.5 to somewhere else entirely.
+    const container = el();
+    const env = scrubbingEnvironment();
+    let resize = () => {};
+    env.addEventListener = (type, fn) => {
+      if (type === "resize") resize = fn;
+    };
+    env.document.body = { scrollHeight: 20000 };
+    let height = 5000;
+    const runway = el("div", { "data-scrollytelling-runway": "" });
+    runway.getBoundingClientRect = () => ({ top: 1000 - env.scrollY, height });
+    runway.appendChild(container);
+
+    const travel = 5000 - env.innerHeight;
+    env.scrollY = 1000 + travel / 2;
+    let scrolledTo = null;
+    env.scrollTo = (o) => {
+      scrolledTo = o;
+    };
+
+    const states = [];
+    const dispose = mount(container, { ...OPTS(), env, onState: (s) => states.push(s) });
+    assert.equal(await drivePaint(container, env, states), 0.5);
+
+    // The runway is expressed in vh, so a shorter viewport shortens it too.
+    env.innerHeight = 400;
+    height = 3000;
+    resize();
+    env.paint();
+    env.paint();
+
+    assert.ok(scrolledTo, "expected the scroll position to be restored");
+    env.scrollY = scrolledTo.top;
+    assert.equal(await drivePaint(container, env, states), 0.5, "the reader moved in the story");
     dispose();
   });
 });
@@ -563,6 +754,30 @@ describe("mount — overlays", () => {
 
     const headings = byClass(container, "st-beat__heading").map((h) => h.textContent);
     assert.deepEqual(headings, ["First", "Second", "Third"]);
+    dispose();
+  });
+
+  it("keeps the progress bar within its track past either end of the hero", async () => {
+    // Progress is measured against the runway, so it is negative above the
+    // hero and greater than 1 below it — neither of which the document formula
+    // could produce. Passed through unclamped it becomes `width: -14%`, which
+    // is not a CSS error, just a declaration the browser drops: the bar stops
+    // reporting and keeps whatever it last showed.
+    const container = el();
+    const env = scrubbingEnvironment();
+    env.document.body = { scrollHeight: 20000 };
+    runwayAround(container, env, { top: 1000, height: 5000 });
+
+    const dispose = mount(container, { ...OPTS(), env });
+    await new Promise((r) => setTimeout(r, 0));
+
+    for (const scrollY of [0, 12000]) {
+      env.scrollY = scrollY;
+      env.paint();
+      const width = byClass(container, "st-progress__fill")[0].style.width;
+      const pct = Number.parseFloat(width);
+      assert.ok(pct >= 0 && pct <= 100, `at ${scrollY} the fill was ${width}`);
+    }
     dispose();
   });
 

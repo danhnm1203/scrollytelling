@@ -258,6 +258,32 @@ describe("scaffold — the no-build template", () => {
   });
 });
 
+describe("scaffold — the runway", () => {
+  // Where each template writes the page. Listed here rather than derived,
+  // because the point is to check the file a human wrote.
+  const PAGES = {
+    next: "components/ScrollSequence.tsx",
+    astro: "src/pages/index.astro",
+    nuxt: "app/app.vue",
+    html: "index.html",
+  };
+
+  for (const [template, page] of Object.entries(PAGES)) {
+    it(`marks the runway on ${template}`, async () => {
+      // The engine scrubs against this element's height rather than the
+      // document's. A template that does not mark one still works — it falls
+      // back to the document — and it works only for as long as the page is
+      // nothing but the hero. Add a section below and the sequence silently
+      // stops short of its own end.
+      const dir = join(tempDir(), "site");
+      await runCapturing([dir], { template });
+
+      const markup = readFileSync(join(dir, page), "utf8");
+      assert.match(markup, /data-scrollytelling-runway/);
+    });
+  }
+});
+
 describe("scaffold", () => {
   it("produces a project whose files all exist", async () => {
     const dir = join(tempDir(), "site");

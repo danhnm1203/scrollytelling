@@ -13,7 +13,11 @@ export type Beat = {
   /** Scroll position, 0 to 1, where this beat is fully readable. */
   at: number;
   align: Align;
-  /** "bottom" puts the copy under the subject instead of across it. */
+  /**
+   * "bottom" puts the copy under the subject instead of across it. `align`
+   * still decides which side it sits on — two bottom-anchored beats with the
+   * same alignment crossfade through each other.
+   */
   anchor?: Anchor;
   heading: string;
   body: string;
