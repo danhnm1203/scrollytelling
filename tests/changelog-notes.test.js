@@ -12,13 +12,13 @@ import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { notesFor } from "../ci/changelog-notes.mjs";
+import { notesFor, titleFor } from "../ci/changelog-notes.mjs";
 
 const CHANGELOG = `# Changelog
 
 Preamble that is not part of any release.
 
-## 0.4.0
+## 0.4.0 — the Nuxt template
 
 ### Added
 
@@ -78,5 +78,42 @@ describe("notesFor", () => {
     for (const version of ["0.2.0", "0.3.0", "0.4.0"]) {
       assert.ok(notesFor(real, version).length > 20, `${version} needs real notes`);
     }
+  });
+
+  it("reads a heading that carries a summary as well as a version", () => {
+    // The summary is what the release is titled with, so the heading has to
+    // hold both — and the notes must not swallow the summary line.
+    assert.equal(notesFor(CHANGELOG, "0.4.0"), "### Added\n\n- A Nuxt template.");
+  });
+});
+
+/**
+ * The release title, which is the one line the repository sidebar shows.
+ *
+ * The first automated release was titled "v0.4.2" — the bare tag — while every
+ * release before it read "v0.4.1 — pages with more than a hero". The sidebar
+ * renders that name, so the automated one arrived saying nothing.
+ */
+describe("titleFor", () => {
+  it("joins the tag to the summary on the heading", () => {
+    assert.equal(titleFor(CHANGELOG, "0.4.0"), "v0.4.0 — the Nuxt template");
+  });
+
+  it("falls back to the bare tag when the heading has no summary", () => {
+    // Worse than a summary, better than failing the release over a missing one.
+    assert.equal(titleFor(CHANGELOG, "0.3.0"), "v0.3.0");
+  });
+
+  it("does not mistake a longer version for the one asked for", () => {
+    const tricky = "## 0.4.0-rc1 — a prerelease\n\nNo.\n\n## 0.4.0 — the real one\n\nYes.\n";
+    assert.equal(titleFor(tricky, "0.4.0"), "v0.4.0 — the real one");
+  });
+
+  it("accepts a hyphen as the separator, not only an em dash", () => {
+    assert.equal(titleFor("## 1.0.0 - plain ascii\n\nNotes.\n", "1.0.0"), "v1.0.0 — plain ascii");
+  });
+
+  it("refuses a version the changelog does not mention", () => {
+    assert.throws(() => titleFor(CHANGELOG, "9.9.9"), /9\.9\.9/);
   });
 });
