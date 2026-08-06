@@ -3,12 +3,20 @@
 /**
  * The scrubbing canvas.
  *
- *   scroll ──▶ progress ──▶ frame index ──┬─▶ draw that frame
- *                                         └─▶ interpolate the page background
+ *   viewport ──▶ canvasSize ──▶ backing store + transform
  *
- * All the arithmetic lives in lib/scroll-math, which is testable without a
- * browser. This file is the part that cannot be: it owns the canvas, the
- * listener and the animation frame, and nothing else.
+ *   scroll ──▶ target ──▶ nextEased ──▶ eased ──┬─▶ frameIndex ──▶ nearestDecoded
+ *                                               │                       │
+ *                                               │                       ▼
+ *                                               │                   drawRect ──▶ draw
+ *                                               ├─▶ backgroundColor ──▶ page bg
+ *                                               ├─▶ windowDiff ──▶ fetch / release
+ *                                               └─▶ fadeOpacity ──▶ beats
+ *
+ * All the arithmetic lives in lib/scroll-math and lib/scroll-engine-state, both
+ * testable without a browser. This file is the part that cannot be: it owns the
+ * canvas, the worker, the listeners and the animation frame, and nothing else.
+ * Every decision above is made elsewhere and merely applied here.
  *
  * The background is the point. Painting the page with each frame's own border
  * color, interpolated between frames, is what stops the canvas showing as a
@@ -34,32 +42,28 @@ import { useEffect, useRef, useState } from "react";
 import { SEQUENCES, framePath, type Sequence } from "@/components/frames";
 import { story, type Beat } from "@/components/story";
 import {
+  backgroundColor,
+  canvasSize,
   decodeStrategy,
+  drawRect,
   framesToRetry,
   loadStateAfter,
+  nearestDecoded,
+  nextEased,
   windowDiff,
   type LoadState,
 } from "@/lib/scroll-engine-state";
 import {
   computeScale,
-  damp,
   fadeOpacity,
   framesInBudget,
   frameIndex,
-  hasSettled,
-  lerpColor,
   scrimOpacity,
   scrollHeightVh,
   scrollProgress,
   selectSequence,
   visibleRect,
 } from "@/lib/scroll-math";
-
-/** Beyond this, more pixels cost more than they show. */
-const MAX_DPR = 2;
-
-/** Subjects usually sit a little above centre. */
-const VERTICAL_ANCHOR = 0.45;
 
 /** Once someone has scrolled this far, they know the page scrolls. */
 const HINT_FADES_AT = 0.02;
@@ -88,7 +92,6 @@ const SCRUB_SECONDS = 0.35;
  * frame count it buys depends entirely on the sequence's resolution.
  */
 const DECODE_BUDGET_BYTES = 96 * 1024 * 1024;
-
 
 /**
  * Whether the visitor has asked their system for reduced motion.
@@ -353,13 +356,19 @@ export function ScrollSequence() {
     const draw = (now: number) => {
       rafRef.current = 0;
 
-      const dpr = Math.min(MAX_DPR, devicePixelRatio || 1);
       const vw = innerWidth;
       const vh = innerHeight;
 
-      if (canvas.width !== Math.round(vw * dpr) || canvas.height !== Math.round(vh * dpr)) {
-        canvas.width = Math.round(vw * dpr);
-        canvas.height = Math.round(vh * dpr);
+      const backing = canvasSize({
+        viewportWidth: vw,
+        viewportHeight: vh,
+        devicePixelRatio,
+      });
+      // Assigning either dimension clears the canvas, so only touch it when it
+      // actually changed.
+      if (canvas.width !== backing.width || canvas.height !== backing.height) {
+        canvas.width = backing.width;
+        canvas.height = backing.height;
       }
 
       // Where the visitor is, which is not the same as what gets drawn.
@@ -369,23 +378,24 @@ export function ScrollSequence() {
       const target = scrollProgress(scrollY, document.body.scrollHeight, vh);
       progressRef.current = target;
 
-      // The first paint of a run snaps. Easing from wherever the last run
-      // stopped would sweep the whole sequence on a mid-page reload, and on a
-      // rotation would fight the scroll restore that just ran.
       const step = lastPaintRef.current ? now - lastPaintRef.current : 0;
       lastPaintRef.current = now;
 
-      let eased = primedRef.current
-        ? damp(easedRef.current, target, SCRUB_SECONDS, step)
-        : target;
+      const { eased, animating } = nextEased({
+        previous: easedRef.current,
+        target,
+        primed: primedRef.current,
+        seconds: SCRUB_SECONDS,
+        deltaMs: step,
+        totalFrames: sequence.totalFrames,
+      });
       primedRef.current = true;
-      if (hasSettled(eased, target, sequence.totalFrames)) eased = target;
       easedRef.current = eased;
 
       // Scheduled here rather than at the end: the draw below returns early
       // when no frame is decoded yet, and stopping the loop there would leave
       // the sequence parked wherever it had eased to.
-      if (eased !== target) schedule();
+      if (animating) schedule();
 
       // Everything the page renders comes off the eased position, so the
       // frame, the background, the beats and the progress bar stay in step
@@ -394,14 +404,11 @@ export function ScrollSequence() {
       frameRef.current = exact;
       setProgress(eased);
 
-      const lo = Math.floor(exact);
-      const hi = Math.min(sequence.totalFrames - 1, Math.ceil(exact));
-
-      const bg = lerpColor(sequence.edgeColors[lo], sequence.edgeColors[hi], exact - lo);
+      const bg = backgroundColor({ sequence, exact });
       const css = `rgb(${bg[0]} ${bg[1]} ${bg[2]})`;
       document.documentElement.style.setProperty("--page-bg", css);
 
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.setTransform(backing.ratio, 0, 0, backing.ratio, 0, 0);
       ctx.fillStyle = css;
       ctx.fillRect(0, 0, vw, vh);
 
@@ -412,17 +419,16 @@ export function ScrollSequence() {
       // the normal case now, not an edge case: frames beyond the window are
       // deliberately not held.
       const held = framesRef.current;
-      const nearest = Math.round(exact);
-      let img = held.get(nearest);
-      for (let d = 1; d < sequence.totalFrames && !img; d++) {
-        img = held.get(nearest - d) ?? held.get(nearest + d);
-      }
+      const index = nearestDecoded({ exact, held: held.keys(), totalFrames: sequence.totalFrames });
+      if (index === null) return;
+
+      // Satisfying the Map's return type rather than handling a real case:
+      // the index came out of held.keys(), so it is present by construction.
+      const img = held.get(index);
       if (!img) return;
 
-      const scale = computeScale(vw, vh, sequence);
-      const w = sequence.width * scale;
-      const h = sequence.height * scale;
-      ctx.drawImage(img, (vw - w) / 2, (vh - h) * VERTICAL_ANCHOR, w, h);
+      const rect = drawRect({ viewportWidth: vw, viewportHeight: vh, sequence });
+      ctx.drawImage(img, rect.x, rect.y, rect.width, rect.height);
     };
 
     function schedule() {
