@@ -151,6 +151,20 @@ Constraints that hold while you build it:
   count-up, a carousel, an autoplaying video. Gate those yourself.
 - Server components by default. Only what listens to scroll is `"use client"`.
 
+- **Leave the runway alone.** The hero sits inside the element marked
+  `data-scrollytelling-runway`, and the engine measures progress against that
+  element rather than the document — which is exactly what lets you put sections
+  under it. Sizing it is how you change how much scrolling the sequence gets;
+  dropping the attribute silently costs the end of the sequence on any page that
+  is more than the hero, and the engine warns in the console when it is missing.
+
+Give adjacent beats different places to sit. They crossfade, so any two
+neighbours are on screen together for the whole handoff, and two in the same box
+fade through each other into mush. `align` moves a beat across the frame and
+`anchor: "bottom"` moves it down; the two are independent, so bottom-anchored
+neighbours still need different `align` values to separate. `frames --check`
+reads the same two bands, so what it reports is where the copy actually is.
+
 Do not give beats explicit fade windows. A beat declares only `at`; the crossfade
 is derived from where its neighbours sit, so the opacities always sum to 1 and no
 scroll position is ever left with no copy on it. The hand-built page mentioned
@@ -191,7 +205,10 @@ Three things follow from this that are easy to get wrong:
 A visitor with `prefers-reduced-motion: reduce` does not get a slower scrub, they
 get a different page: one still, and the story outline promoted from
 screen-reader-only to the page itself. The engine starts no worker, decodes
-nothing, adds no scroll listener and renders no runway.
+nothing and adds no scroll listener, and `lib/scroll-engine.css` collapses the
+runway so the still sits under the prose rather than leaving screens of scroll
+with nothing in them — a server-rendered template writes that height before it
+can know the setting, so the media query is the only thing that ever learns.
 
 This is deliberate, and it costs the reader nothing — the outline is the same
 copy in the same order, which is the reason to keep it truthful as you edit the
@@ -249,7 +266,20 @@ landscape sequence — the choice flips at a square viewport, not at a phone wid
 4. Rotate mid-scroll: the story position must hold.
 5. `$B console --errors` is clean.
 6. No canvas edge is visible at any scroll position, at any of the viewports.
-7. Reduced motion. Browsers do not expose this to a page you can toggle, and
+7. The end of the sequence is reachable, and the hero keeps its overlays. Both
+   only break once the page has sections under the hero, which is why they are
+   checked here rather than assumed: scroll to the last pixel before the hero
+   unsticks and confirm the frame there is the last one, then scroll well past
+   it and confirm nothing from the hero came along.
+   ```
+   $B js "(()=>{const r=document.querySelector('[data-scrollytelling-runway]');
+   const b=[...document.querySelectorAll('.st-beat')].filter(x=>+getComputedStyle(x).opacity>0.01);
+   return JSON.stringify({runway:!!r,heroBottom:r?.getBoundingClientRect().bottom,litBeats:b.length})})()"
+   ```
+   `runway:false` means the page is scrubbing against the document and the tail
+   of the sequence is unreachable. Any lit beat once `heroBottom` is negative
+   means an overlay escaped the hero and is sitting on the copy below.
+8. Reduced motion. Browsers do not expose this to a page you can toggle, and
    `Emulation.setEmulatedMedia` is not on the browse CDP allowlist, so verify it
    the way the page actually decides:
    ```
@@ -260,5 +290,7 @@ landscape sequence — the choice flips at a square viewport, not at a phone wid
    A width of one pixel means the outline is still hidden — the media query is
    losing to the base `.story-outline` rule. A real width means it won.
    Screenshot it and read the result: every beat should be there, in order, as
-   prose. Both rules live in `lib/scroll-engine.css`, so this behaves the same
-   on every template.
+   prose, with the still below it — and the page no taller than that content. A
+   page still hundreds of vh tall here means the runway did not collapse and a
+   reduced-motion visitor is scrolling through nothing. These rules live in
+   `lib/scroll-engine.css`, so this behaves the same on every template.

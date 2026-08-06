@@ -233,6 +233,23 @@ npm run dev
 Scroll the page. Check it at phone width too — the portrait sequence built in
 step 3 is what you will see there.
 
+### Putting the rest of your page under it
+
+The hero is not the whole page unless you want it to be. Add sections below the
+runway — the element marked `data-scrollytelling-runway` — and the sequence still
+runs from the first frame to the last inside it: progress is measured against
+that element, not against the document. The copy overlays and the progress bar
+belong to the hero too, so they end where it ends rather than floating over
+whatever comes next.
+
+Two things follow from that. The runway is what decides how much scrolling the
+sequence gets, so lengthen or shorten it there rather than anywhere else. And if
+you write your own markup, keep the attribute and keep the hero inside it a
+viewport tall, stuck to the top — that is the travel the scrub is derived from.
+Without the attribute the page falls back to measuring the document, which is
+only the same thing when the hero is all there is; the engine says so in the
+console when it happens.
+
 ## Why it looks right
 
 Two measurements are taken while each frame is encoded, and the page uses both.

@@ -24,6 +24,26 @@ export declare function scrollProgress(
   innerHeight: number,
 ): number;
 
+/**
+ * How far through the runway we are, 0 to 1 — what the sequence is scrubbed
+ * against on a page that has anything below the hero. `runwayTop` is
+ * document-relative, the same space as `scrollY`.
+ */
+export declare function runwayProgress(
+  scrollY: number,
+  runwayTop: number,
+  runwayHeight: number,
+  innerHeight: number,
+): number;
+
+/** Where to scroll to land at `progress`. The inverse of `runwayProgress`. */
+export declare function runwayScrollTop(
+  progress: number,
+  runwayTop: number,
+  runwayHeight: number,
+  innerHeight: number,
+): number;
+
 /** Fractional frame index, clamped into range. */
 export declare function frameIndex(progress: number, totalFrames: number): number;
 

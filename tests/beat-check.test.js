@@ -119,6 +119,19 @@ describe("beatLuma", () => {
     assert.ok(overBottom > overTop, `${overBottom} should exceed ${overTop}`);
   });
 
+  it("reads the aligned side for a bottom-anchored beat", () => {
+    // The check has to mirror where the page puts the copy, and `anchor` and
+    // `align` are independent there. A check that averaged the full width
+    // would report the wrong luma for either of two bottom-anchored beats sat
+    // on opposite sides of the frame — and reporting is the whole job.
+    const seq = sequenceOf([columns([0, 1])]);
+    const left = beatLuma(seq, { at: 0, align: "left", anchor: "bottom" });
+    const right = beatLuma(seq, { at: 0, align: "right", anchor: "bottom" });
+
+    assert.ok(left > 0.9, `left should be bright, got ${left}`);
+    assert.ok(right < 0.1, `right should be dark, got ${right}`);
+  });
+
   it("clamps a beat declared outside the scroll range", () => {
     const seq = sequenceOf([flat(0.2), flat(0.8)]);
     for (const at of [-1, 0, 1, 2]) {

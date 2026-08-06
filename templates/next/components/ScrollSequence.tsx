@@ -84,7 +84,10 @@ export function ScrollSequence() {
   const height = reduced ? undefined : `${scrollHeightVh(sequence.totalFrames)}vh`;
 
   return (
-    <div aria-hidden style={{ height }}>
+    // The runway. The attribute is the handshake: the engine scrubs against
+    // this element's height rather than the document's, which is what lets the
+    // page have anything below the hero without the sequence running out early.
+    <div data-scrollytelling-runway aria-hidden style={{ height }}>
       <div
         ref={containerRef}
         className={reduced ? "block w-full" : "sticky top-0 h-screen w-full"}

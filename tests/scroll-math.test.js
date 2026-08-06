@@ -11,6 +11,8 @@ import { describe, it } from "node:test";
 
 import {
   scrollProgress,
+  runwayProgress,
+  runwayScrollTop,
   frameIndex,
   selectSequence,
   computeScale,
@@ -45,6 +47,57 @@ describe("scrollProgress", () => {
     const before = scrollProgress(1500, 4000, 1000);
     const scrollYAfter = before * (7000 - 1000);
     assert.equal(scrollProgress(scrollYAfter, 7000, 1000), before);
+  });
+});
+
+describe("runwayProgress", () => {
+  // The runway is 4000 tall, starts 1000 down the document, and the sticky
+  // hero inside it is one viewport tall — so there are 3000 pixels of travel.
+  const TOP = 1000;
+  const HEIGHT = 4000;
+  const VIEWPORT = 1000;
+
+  it("is 0 when the runway reaches the top of the viewport", () => {
+    assert.equal(runwayProgress(TOP, TOP, HEIGHT, VIEWPORT), 0);
+  });
+
+  it("is 1 when the sticky hero is about to unstick", () => {
+    assert.equal(runwayProgress(TOP + 3000, TOP, HEIGHT, VIEWPORT), 1);
+  });
+
+  it("is linear in between", () => {
+    assert.equal(runwayProgress(TOP + 1500, TOP, HEIGHT, VIEWPORT), 0.5);
+  });
+
+  it("reaches the end of the sequence when there is page below the hero", () => {
+    // The defect this exists to prevent. Deriving progress from the document
+    // instead of the runway, with 2000px of sections below, tops out at 0.6 —
+    // so the last 40% of the footage is unreachable and the final beat never
+    // renders. The runway does not care what is below it.
+    const documentHeight = TOP + HEIGHT + 2000;
+    assert.ok(scrollProgress(TOP + 3000, documentHeight, VIEWPORT) < 0.7);
+    assert.equal(runwayProgress(TOP + 3000, TOP, HEIGHT, VIEWPORT), 1);
+  });
+
+  it("survives a runway shorter than the viewport", () => {
+    assert.ok(Number.isFinite(runwayProgress(0, 0, 500, 1000)));
+  });
+
+  it("round-trips through runwayScrollTop", () => {
+    // What the resize restore relies on: read a progress, change the layout,
+    // scroll back to the same place in the story.
+    for (const p of [0, 0.25, 0.508, 1]) {
+      const top = runwayScrollTop(p, TOP, HEIGHT, VIEWPORT);
+      assert.equal(runwayProgress(top, TOP, HEIGHT, VIEWPORT), p);
+    }
+  });
+
+  it("holds the reader's place when rotation changes the runway", () => {
+    // 0.508 in, the phone turns: the runway is expressed in vh, so it and the
+    // viewport both change. The story position must not.
+    const before = runwayProgress(TOP + 1524, TOP, HEIGHT, VIEWPORT);
+    const after = runwayScrollTop(before, 600, 9000, 400);
+    assert.equal(runwayProgress(after, 600, 9000, 400), before);
   });
 });
 
