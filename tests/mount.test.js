@@ -678,3 +678,27 @@ describe("mount — feedback during the opening decode", () => {
     dispose();
   });
 });
+
+describe("the worker is constructed in the form bundlers can see", () => {
+  it("keeps the literal `new Worker(new URL(..., import.meta.url))` shape", async () => {
+    // A source-level assertion, deliberately, because the SHAPE of the code is
+    // the contract here and nothing else can express it. Bundlers find workers
+    // by matching that literal pattern; any indirection — a variable holding
+    // the URL, a property access for the constructor — and the worker is never
+    // emitted as a chunk.
+    //
+    // Found by building the Astro template. Turbopack happens to trace
+    // `new URL(..., import.meta.url)` on its own, so Next survived the indirect
+    // form and every test stayed green. Vite only traces it inside the
+    // recognised pattern, so Astro shipped no worker and fell back to
+    // main-thread decode — slower, and announced only in the console.
+    const { readFileSync } = await import("node:fs");
+    const source = readFileSync(new URL("../lib/scroll-engine.mjs", import.meta.url), "utf8");
+
+    assert.match(
+      source,
+      /new Worker\(\s*new URL\(\s*["']\.\/decoder\.worker\.js["']\s*,\s*import\.meta\.url\s*\)/,
+      "the Worker construction must stay in the literal form bundlers detect",
+    );
+  });
+});
