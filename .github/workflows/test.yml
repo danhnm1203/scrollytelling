@@ -19,3 +19,30 @@ jobs:
           cache: npm
       - run: npm ci --no-audit --no-fund
       - run: npm test
+
+  # Every template, built for real.
+  #
+  # The offline suite runs in about a second and stays that way, so it does not
+  # install a bundler or reach the network. That leaves a gap the three
+  # templates fell straight into: they share one engine now, so a mistake in
+  # lib/ breaks all of them at once — and it breaks them by silently emitting
+  # nothing rather than by failing. A Worker URL built through a variable made
+  # Vite emit no worker at all; every test passed, Next passed, and only a
+  # human opening Astro in a browser noticed.
+  #
+  # So this asserts emitted files, not exit codes. See ci/template-build.mjs.
+  templates:
+    runs-on: ubuntu-latest
+    strategy:
+      # One broken template should not hide the state of the other two.
+      fail-fast: false
+      matrix:
+        template: [next, astro, html]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: node ci/build-template.mjs ${{ matrix.template }}

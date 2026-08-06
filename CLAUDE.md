@@ -23,6 +23,9 @@ scripts/frames.mjs   extract, measure, encode  (sharp + ffmpeg-static live HERE)
 scripts/scaffold.mjs copy templates/<name>/    (node:fs only)
 templates/<name>/    one directory per template; templates/next/ is the default
 tests/               node:test, no build step
+ci/                  the per-template build gate — installs, bundles, and checks
+                     the emitted files. Needs a network, so it runs in CI, not
+                     in `npm test`. Not in package.json `files`.
 ```
 
 ## Invariants
