@@ -5,6 +5,24 @@ Notable changes to `@danhnm1203/scrollytelling`.
 This file starts at 0.2.0. Earlier releases predate it and are not reconstructed
 here — inventing history is worse than admitting it was not kept.
 
+## 0.4.2
+
+### Fixed
+
+- **The skill never asked which template to use.** Three templates besides
+  `next` have shipped since 0.3.0, and the skill documented all four — but only
+  as an optional `--template` flag on `scaffold`, with `next` as the stated
+  default and nothing telling the agent to raise the choice at all. Its
+  description named Next.js and nothing else. Both together meant every run
+  scaffolded `next` silently, whatever the surrounding project was.
+
+  Choosing the template is its own step now, ahead of agreeing the page, with
+  the trade-off spelled out per template — because the choice decides which
+  files every later step touches, and is expensive to change afterwards.
+  `scaffold` is documented as taking `--template` explicitly, even for `next`.
+
+  Skill file only. The CLI already accepted all four names and still does.
+
 ## 0.4.1
 
 ### Fixed
