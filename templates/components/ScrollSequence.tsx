@@ -38,6 +38,7 @@ import {
   framesToRetry,
   loadStateAfter,
   windowDiff,
+  type LoadState,
 } from "@/lib/scroll-engine-state";
 import {
   computeScale,
@@ -88,17 +89,6 @@ const SCRUB_SECONDS = 0.35;
  */
 const DECODE_BUDGET_BYTES = 96 * 1024 * 1024;
 
-/**
- * Discriminated on `phase`, matching what lib/scroll-engine-state decides.
- *
- * `ready` carries the failed indices rather than a count: the reducer only
- * needs to know how many there were, but anything rendering this wants to say
- * which.
- */
-type LoadState =
-  | { phase: "loading"; done: number; total: number }
-  | { phase: "ready"; failed: number[] }
-  | { phase: "failed" };
 
 /**
  * Whether the visitor has asked their system for reduced motion.
@@ -226,12 +216,14 @@ export function ScrollSequence() {
 
       if (index < initial) settledInitial++;
 
-      const next = loadStateAfter({ index, initial, settled: settledInitial, failed: failed.size });
-      if (next?.phase === "ready") {
-        // The reducer counts them; the page wants to name them.
-        if (next.failed > 0) warnFailed(failed);
-        setLoad({ phase: "ready", failed: [...failed] });
-      } else if (next) {
+      // Hand it every failure and let it narrow to the opening window. Keeping
+      // a second set here and picking between them is the version of this that
+      // goes quietly wrong.
+      const next = loadStateAfter({ index, initial, settled: settledInitial, failed });
+      if (next) {
+        // Warn about every frame that has failed, not only the opening ones —
+        // the visitor sees the gap wherever it is.
+        if (next.phase === "ready" && failed.size > 0) warnFailed(failed);
         setLoad(next);
       }
 

@@ -19,7 +19,7 @@ import { loadStateAfter, windowDiff } from "../lib/scroll-engine-state.mjs";
 
 describe("loadStateAfter", () => {
   it("stays loading while the opening frames are still arriving", () => {
-    assert.deepEqual(loadStateAfter({ index: 0, initial: 4, settled: 1, failed: 0 }), {
+    assert.deepEqual(loadStateAfter({ index: 0, initial: 4, settled: 1, failed: [] }), {
       phase: "loading",
       done: 1,
       total: 4,
@@ -27,9 +27,9 @@ describe("loadStateAfter", () => {
   });
 
   it("reports ready once every opening frame has settled", () => {
-    assert.deepEqual(loadStateAfter({ index: 3, initial: 4, settled: 4, failed: 0 }), {
+    assert.deepEqual(loadStateAfter({ index: 3, initial: 4, settled: 4, failed: [] }), {
       phase: "ready",
-      failed: 0,
+      failed: [],
     });
   });
 
@@ -37,17 +37,53 @@ describe("loadStateAfter", () => {
     // A gap is survivable — the draw loop falls back to the nearest decoded
     // frame. Refusing to start because one file 404d would be worse than the
     // slightly stuttery page the visitor would otherwise get.
-    assert.deepEqual(loadStateAfter({ index: 3, initial: 4, settled: 4, failed: 1 }), {
+    assert.deepEqual(loadStateAfter({ index: 3, initial: 4, settled: 4, failed: [2] }), {
       phase: "ready",
-      failed: 1,
+      failed: [2],
     });
   });
 
   it("fails only when every opening frame failed", () => {
     // Nothing to draw at all. This is the state that earns an error message
     // rather than a blank canvas.
-    assert.deepEqual(loadStateAfter({ index: 3, initial: 4, settled: 4, failed: 4 }), {
+    assert.deepEqual(loadStateAfter({ index: 3, initial: 4, settled: 4, failed: [0, 1, 2, 3] }), {
       phase: "failed",
+    });
+  });
+
+  it("ignores failures from outside the opening window", () => {
+    // The regression. The opening request covers `capacity` frames while only
+    // ceil(capacity/2) of them are opening frames, so frames past the window
+    // can fail first. Counting those made a page whose opening frames had all
+    // decoded report "no frames found" and refuse to render.
+    //
+    // capacity 4 -> initial 2, opening request covers 0..3. Frames 2 and 3
+    // failed, 0 and 1 decoded. That is a working page.
+    assert.deepEqual(loadStateAfter({ index: 1, initial: 2, settled: 2, failed: [2, 3] }), {
+      phase: "ready",
+      failed: [],
+    });
+  });
+
+  it("still fails when the opening window is entirely broken, whatever else failed", () => {
+    assert.deepEqual(loadStateAfter({ index: 1, initial: 2, settled: 2, failed: [0, 1, 7] }), {
+      phase: "failed",
+    });
+  });
+
+  it("reports the failed indices in ascending order", () => {
+    // They settle in whatever order the network returns them; anything
+    // rendering this wants them stable.
+    assert.deepEqual(loadStateAfter({ index: 3, initial: 4, settled: 4, failed: [3, 9, 1] }), {
+      phase: "ready",
+      failed: [1, 3],
+    });
+  });
+
+  it("accepts a Set, which is what the caller actually holds", () => {
+    assert.deepEqual(loadStateAfter({ index: 3, initial: 4, settled: 4, failed: new Set([2]) }), {
+      phase: "ready",
+      failed: [2],
     });
   });
 
@@ -55,18 +91,18 @@ describe("loadStateAfter", () => {
     // Those arrive because the visitor scrolled, long after the page went
     // ready. Letting them touch the load state would drag a live page back to
     // a loading percentage.
-    assert.equal(loadStateAfter({ index: 9, initial: 4, settled: 4, failed: 0 }), null);
+    assert.equal(loadStateAfter({ index: 9, initial: 4, settled: 4, failed: [] }), null);
   });
 
   it("handles a single-frame sequence", () => {
-    assert.deepEqual(loadStateAfter({ index: 0, initial: 1, settled: 1, failed: 0 }), {
+    assert.deepEqual(loadStateAfter({ index: 0, initial: 1, settled: 1, failed: [] }), {
       phase: "ready",
-      failed: 0,
+      failed: [],
     });
   });
 
   it("handles a single-frame sequence whose only frame failed", () => {
-    assert.deepEqual(loadStateAfter({ index: 0, initial: 1, settled: 1, failed: 1 }), {
+    assert.deepEqual(loadStateAfter({ index: 0, initial: 1, settled: 1, failed: [0] }), {
       phase: "failed",
     });
   });

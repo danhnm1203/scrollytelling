@@ -27,18 +27,21 @@ export declare function framesToRetry(state: {
 
 export type LoadState =
   | { phase: "loading"; done: number; total: number }
-  | { phase: "ready"; failed: number }
+  | { phase: "ready"; failed: number[] }
   | { phase: "failed" };
 
 /**
  * What the page should be showing now that one more opening frame has settled.
  * Null when the frame is beyond the opening window and so changes nothing.
+ *
+ * `failed` is the opening-window failures only — counting later ones makes a
+ * page whose opening frames all decoded report that it has none.
  */
 export declare function loadStateAfter(arrival: {
   index: number;
   initial: number;
   settled: number;
-  failed: number;
+  failed: Iterable<number>;
 }): LoadState | null;
 
 /** Which frames to fetch, and which decoded frames to release. */
