@@ -232,6 +232,101 @@ describe("scaffold", () => {
     assert.match(body, /workerUrl|filename/i, "the warning has to say which URL failed");
   });
 
+  it("keys the version record on project paths, not template source paths", async () => {
+    // This is what makes moving templates/* into templates/next/ free. The
+    // record maps "where the file lives in YOUR project" to a hash; the source
+    // root moving underneath changes nothing it stores. Assert it rather than
+    // assume it — the alternative was a migration, and --diff reporting every
+    // file as removed-and-added on projects that had not changed.
+    const dir = join(tempDir(), "site");
+    await runCapturing([dir]);
+
+    const record = JSON.parse(readFileSync(join(dir, ".scrollytelling-version"), "utf8"));
+    const keys = Object.keys(record.files);
+
+    assert.ok(keys.includes("components/ScrollSequence.tsx"));
+    assert.ok(keys.includes("app/page.tsx"));
+    assert.ok(keys.includes("lib/scroll-engine.mjs"));
+    assert.ok(
+      !keys.some((k) => k.startsWith("next/") || k.startsWith("templates/")),
+      `no key may carry the template's source directory, got ${keys.filter((k) => k.includes("next/"))}`,
+    );
+  });
+
+  it("records which template the project came from", async () => {
+    const dir = join(tempDir(), "site");
+    await runCapturing([dir]);
+
+    const record = JSON.parse(readFileSync(join(dir, ".scrollytelling-version"), "utf8"));
+    assert.equal(record.template, "next");
+  });
+
+  it("puts every runtime file in one directory", async () => {
+    // The engine finds its worker relative to its own module URL, so they have
+    // to be siblings. One libDir cannot separate them; a path per file could.
+    const dir = join(tempDir(), "site");
+    await runCapturing([dir]);
+
+    for (const f of ["scroll-engine.mjs", "decoder.worker.js", "scroll-engine.css"]) {
+      assert.ok(existsSync(join(dir, "lib", f)), `${f} must sit in lib/ with the engine`);
+    }
+  });
+
+  it("refuses an unknown template and says which are valid", async () => {
+    // Better than a sanitiser: a typo is told what it should have been. The
+    // name selects a manifest key and never reaches a path join, so traversal
+    // is not something that can be sanitised wrongly — it cannot be expressed.
+    const dir = join(tempDir(), "site");
+    const { code, stderr } = await runCapturing([dir], { template: "nextjs" });
+
+    assert.notEqual(code, 0);
+    assert.match(stderr, /nextjs/);
+    assert.match(stderr, /next/, "an unknown name should say which are valid");
+    assert.ok(!/^\s*at /m.test(stderr), "a bad name must read as a sentence, not a stack trace");
+  });
+
+  it("refuses to scaffold a different template over an existing project", async () => {
+    // The files would land alongside each other, the record would claim the new
+    // template, and every later frames run would resolve paths against the
+    // wrong layout. Nothing errors and the page renders empty.
+    //
+    // The record is written by hand because only one template exists today.
+    // The guard compares what the project says against what was asked for, so
+    // this exercises it fully; the second template just makes it reachable
+    // through the flag as well.
+    const dir = join(tempDir(), "site");
+    await runCapturing([dir]);
+    writeFileSync(
+      join(dir, ".scrollytelling-version"),
+      `${JSON.stringify({ version: "0", template: "astro", files: {} })}\n`,
+    );
+
+    const { code, stderr } = await runCapturing([dir], { template: "next" });
+    assert.notEqual(code, 0);
+    assert.match(stderr, /astro/);
+    assert.match(stderr, /next/);
+    assert.match(stderr, /--force/, "the refusal has to say how to proceed anyway");
+  });
+
+  it("still overwrites across templates when forced", async () => {
+    const dir = join(tempDir(), "site");
+    await runCapturing([dir]);
+    writeFileSync(
+      join(dir, ".scrollytelling-version"),
+      `${JSON.stringify({ version: "0", template: "astro", files: {} })}\n`,
+    );
+
+    const { code } = await runCapturing([dir], { template: "next", force: true });
+    assert.equal(code, 0, "--force is the escape hatch and must still work");
+  });
+
+  it("lists the templates when --template is given no value", async () => {
+    const { code, stdout } = await runCapturing([], { template: null });
+    assert.equal(code, 0);
+    assert.match(stdout, /next/);
+    assert.match(stdout, /Available templates/i);
+  });
+
   it("renders a poster the engine can adopt", async () => {
     // The handshake the whole server-rendered-first-frame story rests on. The
     // engine looks for this attribute and adopts the element instead of

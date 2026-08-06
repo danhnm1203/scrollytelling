@@ -29,8 +29,9 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { planUpgrade } from "../lib/upgrade.mjs";
+import { DEFAULT_TEMPLATE, resolveTemplate, templateNames, TEMPLATES } from "../lib/template-manifest.mjs";
 
-const TEMPLATES = fileURLToPath(new URL("../templates/", import.meta.url));
+const TEMPLATE_ROOT = fileURLToPath(new URL("../templates/", import.meta.url));
 
 /**
  * Where a project records what the template looked like when it was generated.
@@ -55,18 +56,19 @@ const RENAMES = new Map([["gitignore.template", ".gitignore"]]);
  * in this repo means it cannot drift from the version the tests cover — a
  * checked-in duplicate would be a fork the moment someone edited one of them.
  */
-const EXTRA_FILES = [
-  ["../lib/scroll-math.mjs", "lib/scroll-math.mjs"],
-  ["../lib/scroll-math.d.ts", "lib/scroll-math.d.ts"],
-  ["../lib/scroll-engine-state.mjs", "lib/scroll-engine-state.mjs"],
-  ["../lib/scroll-engine-state.d.ts", "lib/scroll-engine-state.d.ts"],
-  ["../lib/scroll-engine.mjs", "lib/scroll-engine.mjs"],
-  ["../lib/scroll-engine.d.ts", "lib/scroll-engine.d.ts"],
-  ["../lib/scroll-engine.css", "lib/scroll-engine.css"],
-  // Must land beside scroll-engine.mjs: the engine locates it with
-  // `new URL("./decoder.worker.js", import.meta.url)`, which resolves relative
-  // to the module holding the literal. Split them and the worker 404s.
-  ["../lib/decoder.worker.js", "lib/decoder.worker.js"],
+const RUNTIME_FILES = [
+  "scroll-math.mjs",
+  "scroll-math.d.ts",
+  "scroll-engine-state.mjs",
+  "scroll-engine-state.d.ts",
+  "scroll-engine.mjs",
+  "scroll-engine.d.ts",
+  "scroll-engine.css",
+  // Placed as a unit with the rest, and that is the point. The engine locates
+  // this with `new URL("./decoder.worker.js", import.meta.url)`, which resolves
+  // relative to the module holding the literal — so it has to be a sibling of
+  // scroll-engine.mjs. One libDir cannot separate them; a path per file could.
+  "decoder.worker.js",
 ];
 
 class ScaffoldError extends Error {}
@@ -80,23 +82,30 @@ function packageVersion() {
 }
 
 /** Every file this package would install, as project path -> content hash. */
-function currentTemplateHashes() {
+function currentTemplateHashes(templateName) {
   const hashes = {};
-  for (const [sourcePath, name] of installableFiles()) hashes[name] = hashOf(sourcePath);
+  for (const [sourcePath, name] of installableFiles(templateName)) hashes[name] = hashOf(sourcePath);
   return hashes;
 }
 
 /** What the project recorded at generation time, or an empty baseline. */
 function readRecord(projectDir) {
   const path = join(projectDir, VERSION_FILE);
-  if (!existsSync(path)) return { version: null, files: {} };
+  if (!existsSync(path)) return { version: null, files: {}, template: DEFAULT_TEMPLATE };
   try {
     const record = JSON.parse(readFileSync(path, "utf8"));
-    return { version: record.version ?? null, files: record.files ?? {} };
+    return {
+      version: record.version ?? null,
+      files: record.files ?? {},
+      // Absent in every project generated before templates existed, and those
+      // can only have been the default — it was the only one there was.
+      // Failing here would break every current user on their next command.
+      template: record.template ?? DEFAULT_TEMPLATE,
+    };
   } catch {
     // A corrupt record is the same situation as no record: the baseline is
     // unknown. Failing here would block a command that only reports.
-    return { version: null, files: {} };
+    return { version: null, files: {}, template: DEFAULT_TEMPLATE };
   }
 }
 
@@ -121,7 +130,7 @@ function byCodePoint(a, b) {
 }
 
 /** Every file under `templates/`, as paths relative to it. */
-function templateFiles(dir = TEMPLATES, prefix = "") {
+function templateFiles(dir, prefix = "") {
   const out = [];
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     const rel = prefix ? `${prefix}/${entry.name}` : entry.name;
@@ -145,10 +154,19 @@ function targetName(relPath) {
  * One list, used by both scaffolding and the diff, so the two can never
  * disagree about what belongs to the template.
  */
-function installableFiles() {
+function installableFiles(templateName = DEFAULT_TEMPLATE) {
+  const template = resolveTemplate(templateName);
+  const root = join(TEMPLATE_ROOT, template.dir);
+
   return [
-    ...templateFiles().map((rel) => [join(TEMPLATES, rel), targetName(rel)]),
-    ...EXTRA_FILES.map(([from, to]) => [fileURLToPath(new URL(from, import.meta.url)), to]),
+    // Keyed on the path INSIDE the project, not the source path. That is why
+    // moving templates/* into templates/next/ needs no migration of an existing
+    // .scrollytelling-version: every recorded key is byte-identical.
+    ...templateFiles(root).map((rel) => [join(root, rel), targetName(rel)]),
+    ...RUNTIME_FILES.map((name) => [
+      fileURLToPath(new URL(`../lib/${name}`, import.meta.url)),
+      `${template.libDir}/${name}`,
+    ]),
   ];
 }
 
@@ -171,6 +189,17 @@ export async function run(positionals, flags = {}) {
 }
 
 function scaffold(positionals, flags) {
+  // `--template` with no value lists rather than erroring: the question it is
+  // usually asked in is "what are my options".
+  if (flags.template === null) {
+    const width = Math.max(...templateNames().map((n) => n.length));
+    const lines = templateNames().map(
+      (n) => `  ${n.padEnd(width)}  ${TEMPLATES[n].description}`,
+    );
+    process.stdout.write(`Available templates:\n${lines.join("\n")}\n`);
+    return 0;
+  }
+
   const [projectDir] = positionals;
   if (!projectDir) {
     throw new ScaffoldError("scaffold needs a project directory. Try: scaffold ./my-site");
@@ -180,11 +209,33 @@ function scaffold(positionals, flags) {
     throw new ScaffoldError(`${projectDir} exists and is not a directory.`);
   }
 
+  const templateName = flags.template ?? DEFAULT_TEMPLATE;
+  let template;
+  try {
+    template = resolveTemplate(templateName);
+  } catch (err) {
+    throw new ScaffoldError(err.message);
+  }
+
+  // Scaffolding one template over a project generated from another leaves a
+  // tree that is neither: the files land alongside each other, the record
+  // claims the new one, and every later `frames` run resolves its paths against
+  // the wrong layout. Nothing errors, and the page renders empty.
+  const existing = readRecord(projectDir);
+  if (existsSync(join(projectDir, VERSION_FILE)) && existing.template !== templateName && !flags.force) {
+    throw new ScaffoldError(
+      `${projectDir} was generated from the "${existing.template}" template; ` +
+        `you asked for "${templateName}".\n` +
+        "  Scaffolding a second template over the first leaves a project that is neither.\n" +
+        "  Scaffold into a new directory, or re-run with --force to overwrite.",
+    );
+  }
+
   const written = [];
   const skipped = [];
   const overwrote = [];
 
-  for (const [sourcePath, name] of installableFiles()) {
+  for (const [sourcePath, name] of installableFiles(templateName)) {
     const target = join(projectDir, name);
 
     if (existsSync(target)) {
@@ -206,10 +257,14 @@ function scaffold(positionals, flags) {
   // project onto this version of the files it already has.
   writeFileSync(
     join(projectDir, VERSION_FILE),
-    `${JSON.stringify({ version: packageVersion(), files: currentTemplateHashes() }, null, 2)}\n`,
+    `${JSON.stringify(
+      { version: packageVersion(), template: templateName, files: currentTemplateHashes(templateName) },
+      null,
+      2,
+    )}\n`,
   );
 
-  report({ projectDir, written, skipped, overwrote, forced: Boolean(flags.force) });
+  report({ projectDir, written, skipped, overwrote, forced: Boolean(flags.force), templateName });
   return 0;
 }
 
@@ -230,7 +285,9 @@ function diff(positionals) {
   }
 
   const record = readRecord(projectDir);
-  const current = currentTemplateHashes();
+  // Compared against the template this project came from, not the default —
+  // otherwise every file in an Astro project reads as changed.
+  const current = currentTemplateHashes(record.template);
   const project = projectHashes(projectDir, [
     ...new Set([...Object.keys(record.files), ...Object.keys(current)]),
   ]);
@@ -287,12 +344,15 @@ function formatDiff(plan, record) {
   return lines;
 }
 
-function report({ projectDir, written, skipped, overwrote, forced }) {
+function report({ projectDir, written, skipped, overwrote, forced, templateName }) {
   const plural = (n) => (n === 1 ? "" : "s");
   const lines = [];
 
   if (written.length) {
-    lines.push(`Created ${written.length} file${plural(written.length)} in ${projectDir}`);
+    lines.push(
+      `Created ${written.length} file${plural(written.length)} in ${projectDir} ` +
+        `from the "${templateName}" template`,
+    );
   }
   if (overwrote.length) {
     lines.push(`Overwrote ${overwrote.length} existing file${plural(overwrote.length)}:`);
