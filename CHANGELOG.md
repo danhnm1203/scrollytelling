@@ -5,6 +5,84 @@ Notable changes to `@danhnm1203/scrollytelling`.
 This file starts at 0.2.0. Earlier releases predate it and are not reconstructed
 here — inventing history is worse than admitting it was not kept.
 
+## 0.5.0 — the scrub stops looking like a slideshow
+
+Four defects in how the sequence is drawn, all found by building a real page on
+real footage rather than by reading the code. Three of them only appear on a
+moving camera; the fourth only appears once you stop scrolling and look.
+
+### Fixed
+
+- **The footage advanced a whole frame at a time.** The draw loop painted the
+  single nearest decoded frame, so fifty frames over four hundred vh stepped
+  every eight vh. Easing the position never helped: it moved smoothly between
+  the same discrete images. The frame below and the frame above are now
+  composited, the second at the fraction between them. Sampled across one
+  frame's worth of scroll: one distinct image before, eleven after.
+
+  It costs one `drawImage` per paint and no extra memory — the two frames are
+  adjacent, so the decode window already holds both. When the upper one is
+  still in flight the base holds instead: half of a missing frame is not half a
+  transition, it is a flash of the wrong picture.
+
+- **A stopped page sat between two frames and showed both.** Blending is right
+  while the picture is moving and wrong the moment it is not. On a camera
+  walking through a room the mean difference between adjacent frames is 20.8 of
+  255 at sixty frames, and at that distance a half mix reads as a double
+  exposure rather than as motion blur — invisible while scrolling, the first
+  thing you see when you stop. The drawn position now resolves onto a whole
+  frame once the scrub settles, and reports when it has arrived so the loop
+  still parks.
+
+- **A stopped page showed two headings at once.** Same argument, applied to the
+  words. The crossfade holds each beat at full strength for most of its stretch
+  and hands over quickly in the middle, which is right while a reader is moving
+  through the story and wrong wherever they come to rest inside a handoff. The
+  copy now resolves onto whichever beat the crossfade already had winning.
+  Measured on a real page: beat opacities `[0, 0, 0.70, 0.30, 0]` mid-scrub,
+  `[0, 0, 1, 0, 0]` once settled.
+
+  The pair still sums to 1 the whole way through, so no scroll position is left
+  with no copy on it.
+
+- **Two beats were dim through most of every handoff.** The crossfade ramped
+  linearly all the way to the neighbour, so each beat was at full opacity for a
+  single instant and washed out everywhere else. On the page used to measure it,
+  62% of the scroll had two beats both part-lit and only 18% had any beat fully
+  lit. It now holds each beat either side of its position and does the swap with
+  a smoothstep across the middle of the gap: 20% and 70% on the same page.
+
+`SCROLL_MATH_VERSION` is `1.3.0`.
+
+### Added
+
+- **The page comes to rest on a beat.** An anchor per beat plus
+  `scroll-snap-type: y mandatory`, so a reader always lands where the copy is
+  clearest. The browser owns the gesture — nothing writes to `scrollY` — so it
+  does not fight native scroll, scroll anchoring or the keyboard.
+
+  Beats are pulled onto whole frames first, which is what makes the landing
+  worth anything: `at` is authored against what the footage is doing and lands
+  mid-frame, so an unaligned anchor would drop the reader somewhere the picture
+  then has to correct itself. The move is at most half a frame, well inside the
+  stretch each beat holds.
+
+  **This imposes one rule on your layout: put your sections after the runway,
+  as its siblings.** Every template does, and `[data-scrollytelling-runway] ~ *`
+  is a snap point for that reason. Mandatory snapping means the page must always
+  rest on one, so a section the selector cannot reach has nowhere legal to stop
+  and the browser drags the reader back to the last beat — everything below the
+  hero becomes unreachable, with nothing in the console to say so.
+
+  Opt out with `data-scrollytelling-snap="off"` on the `html` element. Reduced
+  motion opts out on its own.
+
+**Existing projects:** all of this is in the engine your project carries a copy
+of, so re-run `scrollytelling scaffold .` to take it —
+`scrollytelling scaffold . --diff` reports what moved and neither overwrites a
+file you have edited. If you have edited your page, check that your sections are
+siblings of the runway before you upgrade, or turn snapping off.
+
 ## 0.4.2 — the skill asks which template
 
 ### Fixed
