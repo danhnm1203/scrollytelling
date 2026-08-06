@@ -4,7 +4,7 @@ description: Turn a video (or an ordered image folder) into a scroll-scrubbed la
 argument-hint: "[video-or-image-dir] [project-dir]"
 license: MIT
 metadata:
-  version: "0.4.2"
+  version: "0.5.0"
   repository: "https://github.com/danhnm1203/scrollytelling"
 ---
 
