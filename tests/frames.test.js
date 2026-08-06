@@ -73,7 +73,7 @@ async function stillsDir(count, { width = 160, height = 90, names } = {}) {
 
 /** Reads the generated contract without importing it as TypeScript. */
 function readContract(projectDir) {
-  return readFileSync(join(projectDir, "components/frames.ts"), "utf8");
+  return readFileSync(join(projectDir, "components/frames.js"), "utf8");
 }
 
 /**
@@ -89,12 +89,30 @@ function contractValue(source, name) {
   return JSON.parse(m[1]);
 }
 
+/**
+ * A directory the frame pipeline will accept.
+ *
+ * The version record is the realistic setup, not ceremony: a project always
+ * comes from `scaffold`, and `frames` now refuses a directory whose template it
+ * cannot determine. Guessing there would write the contract and the frames to
+ * paths nothing reads — a project that builds, renders nothing, and reports no
+ * error.
+ */
+function prepareProject(dir) {
+  mkdirSync(join(dir, "components"), { recursive: true });
+  writeFileSync(
+    join(dir, ".scrollytelling-version"),
+    `${JSON.stringify({ version: "test", template: "next", files: {} })}\n`,
+  );
+  return dir;
+}
+
 describe("frames — from a directory of stills", () => {
   let project;
 
   before(async () => {
     project = join(tempDir(), "site");
-    mkdirSync(join(project, "components"), { recursive: true });
+    prepareProject(project);
     const src = await stillsDir(12);
     const { code } = await runCapturing([src, project], { frames: 6 });
     assert.equal(code, 0, "pipeline should succeed");
@@ -150,7 +168,7 @@ describe("frames — from a directory of stills", () => {
     const names = Array.from({ length: 12 }, (_, i) => `shot_${i + 1}.png`);
     const src = await stillsDir(12, { names });
     const dest = join(tempDir(), "site");
-    mkdirSync(join(dest, "components"), { recursive: true });
+    prepareProject(dest);
 
     await runCapturing([src, dest], { frames: 12 });
 
@@ -191,7 +209,7 @@ describe("frames — failure paths", () => {
 
   it("leaves a previous sequence intact when a run fails", async () => {
     const project = join(tempDir(), "site");
-    mkdirSync(join(project, "components"), { recursive: true });
+    prepareProject(project);
 
     const good = await stillsDir(4);
     await runCapturing([good, project], { frames: 4 });
@@ -212,7 +230,7 @@ describe("frames — failure paths", () => {
   it("uses every image and warns when asked for more than exist", async () => {
     const src = await stillsDir(3);
     const project = join(tempDir(), "site");
-    mkdirSync(join(project, "components"), { recursive: true });
+    prepareProject(project);
 
     const { code, stdout, stderr } = await runCapturing([src, project], { frames: 50 });
 
@@ -233,7 +251,7 @@ describe("frames — failure paths", () => {
       .toFile(join(src, "b.png"));
 
     const project = join(tempDir(), "site");
-    mkdirSync(join(project, "components"), { recursive: true });
+    prepareProject(project);
 
     const { code } = await runCapturing([src, project], { frames: 2 });
 
@@ -251,7 +269,7 @@ describe("frames — failure paths", () => {
       .toFile(join(src, "b_tall.png"));
 
     const project = join(tempDir(), "site");
-    mkdirSync(join(project, "components"), { recursive: true });
+    prepareProject(project);
 
     const { code, stderr } = await runCapturing([src, project], { frames: 2 });
 
@@ -270,7 +288,7 @@ describe("frames — failure paths", () => {
       .toFile(join(src, "b.png"));
 
     const project = join(tempDir(), "site");
-    mkdirSync(join(project, "components"), { recursive: true });
+    prepareProject(project);
 
     const { code } = await runCapturing([src, project], { frames: 2 });
 
@@ -283,7 +301,7 @@ describe("frames — portrait sequence", () => {
 
   before(async () => {
     project = join(tempDir(), "site");
-    mkdirSync(join(project, "components"), { recursive: true });
+    prepareProject(project);
     const src = await stillsDir(10, { width: 320, height: 180 });
     const { code } = await runCapturing([src, project], { frames: 5 });
     assert.equal(code, 0);
@@ -321,7 +339,7 @@ describe("frames — portrait sequence", () => {
 
   it("can be skipped when the extra weight is not wanted", async () => {
     const dest = join(tempDir(), "site");
-    mkdirSync(join(dest, "components"), { recursive: true });
+    prepareProject(dest);
     const src = await stillsDir(6, { width: 320, height: 180 });
 
     await runCapturing([src, dest], { frames: 3, "skip-portrait": true });
@@ -353,7 +371,7 @@ describe("frames — portrait sequence", () => {
 
     const readEdge = async (focus) => {
       const dest = join(tempDir(), "site");
-      mkdirSync(join(dest, "components"), { recursive: true });
+      prepareProject(dest);
       await runCapturing([src, dest], { frames: 2, focus });
       const portrait = contractValue(readContract(dest), "SEQUENCES").find(
         (s) => s.id === "portrait",
@@ -368,7 +386,7 @@ describe("frames — portrait sequence", () => {
 
   it("rejects a focus outside the frame", async () => {
     const dest = join(tempDir(), "site");
-    mkdirSync(join(dest, "components"), { recursive: true });
+    prepareProject(dest);
     const src = await stillsDir(4, { width: 320, height: 180 });
 
     const { code, stderr } = await runCapturing([src, dest], { frames: 2, focus: 5 });
@@ -381,7 +399,7 @@ describe("frames — portrait sequence", () => {
     // Cropping a portrait source to portrait would just shave its sides off
     // for no benefit.
     const dest = join(tempDir(), "site");
-    mkdirSync(join(dest, "components"), { recursive: true });
+    prepareProject(dest);
     const src = await stillsDir(4, { width: 180, height: 320 });
 
     await runCapturing([src, dest], { frames: 2 });
@@ -419,7 +437,7 @@ describe("frames — corrupt frames", () => {
   it("skips one bad frame and completes the run", async () => {
     const src = await mixedDir(20, [7]);
     const project = join(tempDir(), "site");
-    mkdirSync(join(project, "components"), { recursive: true });
+    prepareProject(project);
 
     const { code } = await runCapturing([src, project], { frames: 20, "skip-portrait": true });
 
@@ -429,7 +447,7 @@ describe("frames — corrupt frames", () => {
   it("names the file it skipped", async () => {
     const src = await mixedDir(20, [7]);
     const project = join(tempDir(), "site");
-    mkdirSync(join(project, "components"), { recursive: true });
+    prepareProject(project);
 
     const { stdout, stderr } = await runCapturing([src, project], {
       frames: 20,
@@ -445,7 +463,7 @@ describe("frames — corrupt frames", () => {
     // missing file.
     const src = await mixedDir(20, [3, 11]);
     const project = join(tempDir(), "site");
-    mkdirSync(join(project, "components"), { recursive: true });
+    prepareProject(project);
 
     await runCapturing([src, project], { frames: 20, "skip-portrait": true });
 
@@ -468,7 +486,7 @@ describe("frames — corrupt frames", () => {
   it("keeps both sequences the same length when one source is bad", async () => {
     const src = await mixedDir(20, [5]);
     const project = join(tempDir(), "site");
-    mkdirSync(join(project, "components"), { recursive: true });
+    prepareProject(project);
 
     await runCapturing([src, project], { frames: 20 });
 
@@ -482,7 +500,7 @@ describe("frames — corrupt frames", () => {
     // shorter animation would hide that.
     const src = await mixedDir(20, [1, 3, 5, 7, 9, 11, 13]);
     const project = join(tempDir(), "site");
-    mkdirSync(join(project, "components"), { recursive: true });
+    prepareProject(project);
 
     const { code, stderr } = await runCapturing([src, project], {
       frames: 20,
@@ -496,7 +514,7 @@ describe("frames — corrupt frames", () => {
   it("says how many failed when it aborts", async () => {
     const src = await mixedDir(20, [1, 3, 5, 7, 9, 11, 13]);
     const project = join(tempDir(), "site");
-    mkdirSync(join(project, "components"), { recursive: true });
+    prepareProject(project);
 
     const { stderr } = await runCapturing([src, project], { frames: 20, "skip-portrait": true });
     assert.match(stderr, /7/);
@@ -504,7 +522,7 @@ describe("frames — corrupt frames", () => {
 
   it("leaves a previous sequence intact when it aborts", async () => {
     const project = join(tempDir(), "site");
-    mkdirSync(join(project, "components"), { recursive: true });
+    prepareProject(project);
 
     const good = await stillsDir(8, { width: 160, height: 90 });
     await runCapturing([good, project], { frames: 8, "skip-portrait": true });
@@ -520,7 +538,7 @@ describe("frames — corrupt frames", () => {
   it("fails clearly when every frame is unreadable", async () => {
     const src = await mixedDir(6, [0, 1, 2, 3, 4, 5]);
     const project = join(tempDir(), "site");
-    mkdirSync(join(project, "components"), { recursive: true });
+    prepareProject(project);
 
     const { code, stderr } = await runCapturing([src, project], { frames: 6 });
 
@@ -534,7 +552,7 @@ describe("frames — readability report", () => {
   it("prints a luminance table per region and scroll position", async () => {
     const src = await stillsDir(12, { width: 320, height: 180 });
     const project = join(tempDir(), "site");
-    mkdirSync(join(project, "components"), { recursive: true });
+    prepareProject(project);
 
     const { stdout } = await runCapturing([src, project], { frames: 6, "skip-portrait": true });
 
@@ -549,7 +567,7 @@ describe("frames — readability report", () => {
     // stillsDir ramps black to white, so the table must rise left to right.
     const src = await stillsDir(12, { width: 320, height: 180 });
     const project = join(tempDir(), "site");
-    mkdirSync(join(project, "components"), { recursive: true });
+    prepareProject(project);
 
     const { stdout } = await runCapturing([src, project], { frames: 12, "skip-portrait": true });
 
@@ -575,7 +593,7 @@ describe("frames — readability report", () => {
         .toFile(join(src, `f_${i}.png`));
     }
     const project = join(tempDir(), "site");
-    mkdirSync(join(project, "components"), { recursive: true });
+    prepareProject(project);
 
     const { stdout } = await runCapturing([src, project], { frames: 8, "skip-portrait": true });
 
@@ -590,7 +608,7 @@ describe("frames — readability report", () => {
         .toFile(join(src, `f_${i}.png`));
     }
     const project = join(tempDir(), "site");
-    mkdirSync(join(project, "components"), { recursive: true });
+    prepareProject(project);
 
     const { stdout } = await runCapturing([src, project], { frames: 4, "skip-portrait": true });
 
@@ -602,7 +620,7 @@ describe("frames — readability report", () => {
     // The check command does that, after copy has been written.
     const src = await stillsDir(6, { width: 320, height: 180 });
     const project = join(tempDir(), "site");
-    mkdirSync(join(project, "components"), { recursive: true });
+    prepareProject(project);
 
     const { stdout } = await runCapturing([src, project], { frames: 4, "skip-portrait": true });
 
@@ -622,11 +640,11 @@ describe("frames — per-beat check", () => {
         .toFile(join(src, `f_${i}.png`));
     }
     const project = join(tempDir(), "site");
-    mkdirSync(join(project, "components"), { recursive: true });
+    prepareProject(project);
     await runCapturing([src, project], { frames: 6, "skip-portrait": true });
 
     writeFileSync(
-      join(project, "components/story.ts"),
+      join(project, "components/story.js"),
       `export const story = { brand: "X", sections: ${JSON.stringify(beats)} };\n`,
     );
     return project;
@@ -666,8 +684,8 @@ describe("frames — per-beat check", () => {
 
   it("explains that generation comes first when there are no frames", async () => {
     const bare = join(tempDir(), "site");
-    mkdirSync(join(bare, "components"), { recursive: true });
-    writeFileSync(join(bare, "components/story.ts"), "export const story = { sections: [] };\n");
+    prepareProject(bare);
+    writeFileSync(join(bare, "components/story.js"), "export const story = { sections: [] };\n");
 
     const { code, stderr } = await runCapturing([bare], { check: true });
 
@@ -677,12 +695,12 @@ describe("frames — per-beat check", () => {
 
   it("explains when there is no copy to check", async () => {
     const project = await projectWith(5, []);
-    rmSync(join(project, "components/story.ts"));
+    rmSync(join(project, "components/story.js"));
 
     const { code, stderr } = await runCapturing([project], { check: true });
 
     assert.notEqual(code, 0);
-    assert.match(stderr, /story\.ts/);
+    assert.match(stderr, /story\.js/);
   });
 
   it("requires a project directory", async () => {
@@ -714,5 +732,53 @@ describe("frames — preview mode", () => {
     assert.ok(dir, `expected a path in the output, got: ${stdout}`);
     assert.ok(existsSync(dir));
     writeFileSync(join(dir, ".keep"), ""); // proves it is a real, usable directory
+  });
+});
+
+describe("frames — which template a project uses", () => {
+  it("refuses to write into a directory whose layout it cannot determine", async () => {
+    // Guessing would put the contract and the frames at paths nothing reads:
+    // the project builds, renders nothing, and reports no error. That is worth
+    // refusing over.
+    const src = await stillsDir(2);
+    const project = join(tempDir(), "site");
+    mkdirSync(project, { recursive: true });
+
+    const { code, stderr } = await runCapturing([src, project], { frames: 2 });
+    assert.notEqual(code, 0);
+    assert.match(stderr, /scrollytelling-version/);
+    assert.match(stderr, /scaffold|--template/, "the refusal has to say how to fix it");
+    assert.ok(!/^\s*at /m.test(stderr), "it must read as a sentence, not a stack trace");
+  });
+
+  it("accepts an explicit --template instead of the record", async () => {
+    const src = await stillsDir(2);
+    const project = join(tempDir(), "site");
+    mkdirSync(join(project, "components"), { recursive: true });
+
+    const { code } = await runCapturing([src, project], { frames: 2, template: "next" });
+    assert.equal(code, 0, "being able to say it explicitly is the escape hatch");
+  });
+
+  it("--check reports rather than refusing when there is no record", async () => {
+    // A reporting command that refuses is the instinct readRecord's deliberate
+    // silent recovery was written to avoid. Only the data-writing path errors.
+    const project = join(tempDir(), "site");
+    mkdirSync(join(project, "components"), { recursive: true });
+    writeFileSync(join(project, "components/frames.js"), "export const SEQUENCES = [];\n");
+    writeFileSync(
+      join(project, "components/story.js"),
+      "export const story = { brand: \"x\", title: \"x\", description: \"x\", sections: [] };\n",
+    );
+
+    const { stderr } = await runCapturing([project], { check: true });
+
+    // It may still complain about the contract being empty — that is a real
+    // thing to report. What it must never do is refuse because it could not
+    // work out the template: this command only reads.
+    assert.ok(
+      !/scrollytelling-version/.test(stderr),
+      `--check must not refuse over a missing record; stderr was ${stderr}`,
+    );
   });
 });

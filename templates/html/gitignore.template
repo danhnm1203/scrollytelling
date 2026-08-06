@@ -1,0 +1,22 @@
+# os
+.DS_Store
+
+# logs
+*.log
+
+# --------------------------------------------------------------------------
+# Two things this project has to commit, unlike a normal static site.
+#
+# frames/ — the encoded webp sequence. A deploy builds from a fresh clone, so
+# if the frames are not in git there is nothing for the page to draw. They are
+# generated output, which makes ignoring them the instinct. Do not. Re-running
+# `scrollytelling frames` replaces the whole directory, so squash the history
+# before publishing if it gets heavy.
+#
+# .scrollytelling-version — records what the template looked like when this
+# project was generated. `scrollytelling scaffold . --diff` needs it to say
+# what has moved since. Losing it costs you that report.
+#
+# Both are named below so a later broad rule cannot quietly sweep them up.
+!frames/
+!.scrollytelling-version

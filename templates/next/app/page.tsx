@@ -16,7 +16,7 @@ import { story } from "@/components/story";
  */
 function StoryOutline() {
   return (
-    <main className="story-outline sr-only">
+    <main className="story-outline">
       <h1>{story.brand}</h1>
       <p>{story.description}</p>
       {story.sections.map((beat) => (

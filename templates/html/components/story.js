@@ -8,29 +8,13 @@
  * Place beats against what the footage is actually doing, not round numbers.
  * `scrollytelling frames --check <this project>` reads this file and tells
  * you which beats will be hard to read against the frames behind them.
+ *
+ * Plain JavaScript with its types in story.d.ts, so a template with no build
+ * step can import it. Your editor still checks it, and so does `next build`.
  */
 
-export type Align = "left" | "center" | "right";
-export type Anchor = "middle" | "bottom";
-
-export type Beat = {
-  /** Scroll position, 0 to 1, where this beat is fully readable. */
-  at: number;
-  align: Align;
-  /** "bottom" puts the copy under the subject instead of across it. */
-  anchor?: Anchor;
-  heading: string;
-  body: string;
-};
-
-export type Story = {
-  brand: string;
-  title: string;
-  description: string;
-  sections: Beat[];
-};
-
-export const story: Story = {
+/** @type {import("./story").Story} */
+export const story = {
   brand: "ORBIT",
   title: "Orbit — every part accounted for",
   description:

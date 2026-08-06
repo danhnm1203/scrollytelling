@@ -7,7 +7,7 @@ import { parseArgs, UsageError } from "../lib/cli-args.mjs";
 const HELP = `scrollytelling — turn a video into a scroll-scrubbed Next.js landing page
 
 Usage
-  scrollytelling scaffold <project_dir> [--force] [--diff]
+  scrollytelling scaffold <project_dir> [--template <name>] [--force] [--diff]
   scrollytelling frames <video|image-dir> <project_dir> [options]
   scrollytelling frames --preview <video>
   scrollytelling frames --check <project_dir>
@@ -18,8 +18,10 @@ frames options
   --quality <n>     webp quality, 1-100                   (default 82)
   --focus <0-1>     where the portrait crop sits horizontally  (default 0.5)
   --skip-portrait   build only the landscape sequence
+  --template <name> override the template recorded by scaffold (rarely needed)
 
 scaffold options
+  --template <name> which template to generate; omit the name to list them
   --force           overwrite existing template files
   --diff            report template changes since this project was generated
 
