@@ -60,6 +60,18 @@ export declare function nextEased(step: {
   totalFrames: number;
 }): { eased: number; animating: boolean };
 
+/**
+ * How big the canvas backing store should be, in device pixels.
+ *
+ * `ratio` comes back too because the caller needs the same number for its
+ * drawing transform; re-deriving it would pick up the rounding.
+ */
+export declare function canvasSize(viewport: {
+  viewportWidth: number;
+  viewportHeight: number;
+  devicePixelRatio?: number;
+}): { width: number; height: number; ratio: number };
+
 /** The page background for this position, interpolated between frame edges. */
 export declare function backgroundColor(at: {
   sequence: { totalFrames: number; edgeColors: readonly (readonly number[])[] };

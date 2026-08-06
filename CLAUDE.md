@@ -12,7 +12,10 @@ An npm CLI + skill that turns a video into a scroll-scrubbed Next.js landing pag
 ```
 bin/cli.mjs          argument dispatch only; commands live in scripts/
 lib/cli-args.mjs     pure arg parsing (no fs, no exit, no console)
-lib/scroll-math.mjs  all maths that decides what is drawn — pure, fully tested
+lib/scroll-math.mjs  the primitives — scale, easing, fade, scrim. pure, fully tested
+lib/scroll-engine-state.mjs
+                     what the runtime decides, composed from those primitives:
+                     load state, decode window, draw parameters. pure, no DOM
 scripts/frames.mjs   extract, measure, encode  (sharp + ffmpeg-static live HERE)
 scripts/scaffold.mjs copy templates/          (node:fs only)
 templates/           the generated Next.js project

@@ -3,6 +3,8 @@
 /**
  * The scrubbing canvas.
  *
+ *   viewport ──▶ canvasSize ──▶ backing store + transform
+ *
  *   scroll ──▶ target ──▶ nextEased ──▶ eased ──┬─▶ frameIndex ──▶ nearestDecoded
  *                                               │                       │
  *                                               │                       ▼
@@ -41,6 +43,7 @@ import { SEQUENCES, framePath, type Sequence } from "@/components/frames";
 import { story, type Beat } from "@/components/story";
 import {
   backgroundColor,
+  canvasSize,
   decodeStrategy,
   drawRect,
   framesToRetry,
@@ -61,9 +64,6 @@ import {
   selectSequence,
   visibleRect,
 } from "@/lib/scroll-math";
-
-/** Beyond this, more pixels cost more than they show. */
-const MAX_DPR = 2;
 
 /** Once someone has scrolled this far, they know the page scrolls. */
 const HINT_FADES_AT = 0.02;
@@ -356,13 +356,19 @@ export function ScrollSequence() {
     const draw = (now: number) => {
       rafRef.current = 0;
 
-      const dpr = Math.min(MAX_DPR, devicePixelRatio || 1);
       const vw = innerWidth;
       const vh = innerHeight;
 
-      if (canvas.width !== Math.round(vw * dpr) || canvas.height !== Math.round(vh * dpr)) {
-        canvas.width = Math.round(vw * dpr);
-        canvas.height = Math.round(vh * dpr);
+      const backing = canvasSize({
+        viewportWidth: vw,
+        viewportHeight: vh,
+        devicePixelRatio,
+      });
+      // Assigning either dimension clears the canvas, so only touch it when it
+      // actually changed.
+      if (canvas.width !== backing.width || canvas.height !== backing.height) {
+        canvas.width = backing.width;
+        canvas.height = backing.height;
       }
 
       // Where the visitor is, which is not the same as what gets drawn.
@@ -372,9 +378,6 @@ export function ScrollSequence() {
       const target = scrollProgress(scrollY, document.body.scrollHeight, vh);
       progressRef.current = target;
 
-      // The first paint of a run snaps. Easing from wherever the last run
-      // stopped would sweep the whole sequence on a mid-page reload, and on a
-      // rotation would fight the scroll restore that just ran.
       const step = lastPaintRef.current ? now - lastPaintRef.current : 0;
       lastPaintRef.current = now;
 
@@ -405,7 +408,7 @@ export function ScrollSequence() {
       const css = `rgb(${bg[0]} ${bg[1]} ${bg[2]})`;
       document.documentElement.style.setProperty("--page-bg", css);
 
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.setTransform(backing.ratio, 0, 0, backing.ratio, 0, 0);
       ctx.fillStyle = css;
       ctx.fillRect(0, 0, vw, vh);
 
@@ -419,6 +422,8 @@ export function ScrollSequence() {
       const index = nearestDecoded({ exact, held: held.keys(), totalFrames: sequence.totalFrames });
       if (index === null) return;
 
+      // Satisfying the Map's return type rather than handling a real case:
+      // the index came out of held.keys(), so it is present by construction.
       const img = held.get(index);
       if (!img) return;
 

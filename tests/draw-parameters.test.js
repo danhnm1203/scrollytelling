@@ -16,6 +16,7 @@ import { describe, it } from "node:test";
 
 import {
   backgroundColor,
+  canvasSize,
   drawRect,
   nearestDecoded,
   nextEased,
@@ -226,5 +227,55 @@ describe("nearestDecoded", () => {
       [7, "bitmap"],
     ]);
     assert.equal(nearestDecoded({ exact: 6, held: held.keys(), totalFrames: 10 }), 7);
+  });
+});
+
+describe("canvasSize", () => {
+  it("scales the backing store by the device pixel ratio", () => {
+    assert.deepEqual(canvasSize({ viewportWidth: 800, viewportHeight: 600, devicePixelRatio: 2 }), {
+      width: 1600,
+      height: 1200,
+      ratio: 2,
+    });
+  });
+
+  it("caps the ratio, because past a point more pixels only cost", () => {
+    assert.deepEqual(canvasSize({ viewportWidth: 800, viewportHeight: 600, devicePixelRatio: 3 }), {
+      width: 1600,
+      height: 1200,
+      ratio: 2,
+    });
+  });
+
+  it("falls back to 1 when the browser does not report a ratio", () => {
+    // devicePixelRatio is 0 or undefined in some embedded webviews. Multiplying
+    // by it gives a zero-sized canvas, which draws nothing and reports no error.
+    assert.deepEqual(canvasSize({ viewportWidth: 800, viewportHeight: 600, devicePixelRatio: 0 }), {
+      width: 800,
+      height: 600,
+      ratio: 1,
+    });
+    assert.deepEqual(canvasSize({ viewportWidth: 800, viewportHeight: 600 }), {
+      width: 800,
+      height: 600,
+      ratio: 1,
+    });
+  });
+
+  it("returns the ratio it used, for the drawing transform", () => {
+    // Re-deriving it from width/viewportWidth would pick up the rounding and
+    // put the transform slightly out of step with the buffer it draws into.
+    assert.equal(
+      canvasSize({ viewportWidth: 801, viewportHeight: 601, devicePixelRatio: 1.5 }).ratio,
+      1.5,
+    );
+  });
+
+  it("rounds to whole pixels", () => {
+    // A fractional backing store is silently rounded by the browser, and the
+    // mismatch shows up as a blurry canvas rather than an error.
+    const size = canvasSize({ viewportWidth: 801, viewportHeight: 601, devicePixelRatio: 1.5 });
+    assert.equal(size.width, Math.round(801 * 1.5));
+    assert.equal(size.height, Math.round(601 * 1.5));
   });
 });
