@@ -78,23 +78,24 @@ Start a new session and it is available as **`/scrollytelling`**.
    visual language, and what each beat says. The scrubber is a hero, not a whole
    page — see "The page below the hero".
 4. `scrollytelling scaffold <project_dir> [--template <name>]` — `next` is the
-   default. `astro` and `html` also exist; `--template` with no name lists them.
-   Pick `html` when the page has to work with no build step at all.
+   default. `nuxt`, `astro` and `html` also exist; `--template` with no name
+   lists them. Pick `html` when the page has to work with no build step at all.
 5. `cd <project_dir> && npm install` — only next/react/react-dom, so it is fast.
    The `html` template skips this entirely: there is nothing to install.
 6. `scrollytelling frames <video> <project_dir> --frames 50 [--focus 0.5]`
    — read the luminance table it prints. `--focus` is where the portrait crop sits
    horizontally, 0 to 1; the subject is not always centred.
 7. Edit the story file — `components/story.js` on `next` and `html`,
-   `src/components/story.js` on `astro`. It is plain JavaScript with its types
+   `app/components/story.js` on `nuxt`, `src/components/story.js` on `astro`.
+   It is plain JavaScript with its types
    in a sibling `.d.ts`, so your editor still catches a mistyped `align` and so
    does the build.
 8. `scrollytelling frames --check <project_dir>` — per-beat readability warnings.
 9. Build the rest of the page.
 10. Build and serve it. `npm run build && npm run start -- -p 3737` on `next`,
-    `npm run build && npm run preview` on `astro`, and any static server on
-    `html` — module scripts and workers are same-origin, so `file://` will not
-    work there.
+    `npm run build && npm run preview` on `nuxt` and `astro`, and any static
+    server on `html` — module scripts and workers are same-origin, so `file://`
+    will not work there.
 11. **Measurement checkpoint** (below).
 12. Verify, then report.
 
@@ -138,7 +139,8 @@ Constraints that hold while you build it:
   in `public/frames/`, already sized and optimised. Pulling fresh stills with
   ffmpeg means shipping another copy of the same pixels.
 - **Keep the story outline as the only `<h1>`.** It lives in `app/page.tsx` on
-  `next`, `src/pages/index.astro` on `astro`, and `index.html` on `html`. Section headings are
+  `next`, `app/app.vue` on `nuxt`, `src/pages/index.astro` on `astro`, and
+  `index.html` on `html`. Section headings are
   `<h2>`. The canvas is `aria-hidden` decoration; the outline is what a screen
   reader and a crawler actually read.
 - **Honour `prefers-reduced-motion`** in anything you add. The hero already does

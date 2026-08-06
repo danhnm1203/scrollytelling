@@ -1,0 +1,19 @@
+{
+  // Nuxt generates the real configuration into .nuxt/ on `nuxt prepare`, which
+  // runs on postinstall. This file only points at it and adds what this project
+  // needs on top.
+  "extends": "./.nuxt/tsconfig.json",
+  "compilerOptions": {
+    // The story and the frames contract are JavaScript so a template with no
+    // build step can import them. allowJs permits that; checkJs is what keeps
+    // them checked — without it a mistyped `align` survives to runtime.
+    "allowJs": true,
+    "checkJs": true
+  },
+  "exclude": [
+    ".output",
+    // Runs in a Worker, not a window. Checked against DOM globals, correct
+    // worker code is rejected and a clean scaffold fails to build.
+    "app/lib/decoder.worker.js"
+  ]
+}

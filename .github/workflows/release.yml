@@ -27,10 +27,33 @@ permissions:
   contents: read
 
 jobs:
+  # Builds every template from the tagged commit before anything publishes.
+  #
+  # `npm test` alone is not a publish gate for this package. What it ships is a
+  # scaffolder, so the thing that has to work is the project that comes out of
+  # it — and the last two release-worthy bugs (a worker no bundler emitted, a
+  # zero-length tuple that would not typecheck) were both invisible to the
+  # suite and obvious the moment a generated project was built.
+  templates:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        template: [next, nuxt, astro, html]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: node ci/build-template.mjs ${{ matrix.template }}
+
   npm:
     # Only on a real tag push. A manual run is for backfilling the GitHub
     # Packages side, and npm will not accept a version it already has.
     if: github.event_name == 'push'
+    needs: templates
     runs-on: ubuntu-latest
     permissions:
       contents: read
