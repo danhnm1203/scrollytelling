@@ -1,0 +1,131 @@
+---
+/**
+ * The whole page.
+ *
+ * Astro renders this at build time, so the story outline is built from
+ * components/story.js here rather than written into the HTML by `frames` — the
+ * no-build template needs that, this one does not. Same single source of truth,
+ * one less moving part.
+ *
+ * The scrubbing itself is the same engine every other template gets. This file
+ * is the markup plus the handful of lines that hand it a container.
+ */
+import { SEQUENCES, framePath } from "../components/frames.js";
+import { story } from "../components/story.js";
+import { scrollHeightVh } from "../lib/scroll-math.mjs";
+import "../lib/scroll-engine.css";
+
+const sequence = SEQUENCES[0];
+const runwayHeight = sequence ? `${scrollHeightVh(sequence.totalFrames)}vh` : undefined;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{story.title}</title>
+    <meta name="description" content={story.description} />
+  </head>
+  <body>
+    {/*
+      The story, once, as ordinary prose.
+
+      Visually hidden but present in the document, so a screen reader gets one
+      coherent description and a crawler sees the whole page's copy. It is also
+      the page a visitor gets when they have asked for reduced motion: the scrub
+      does not run then, and lib/scroll-engine.css makes this visible rather
+      than inventing a second, lesser version of the same copy.
+    */}
+    <main class="story-outline">
+      <h1>{story.brand}</h1>
+      <p>{story.description}</p>
+      {
+        story.sections.map((beat) => (
+          <section>
+            <h2>{beat.heading}</h2>
+            <p>{beat.body}</p>
+          </section>
+        ))
+      }
+    </main>
+
+    {
+      sequence ? (
+        <div data-scrollytelling-runway aria-hidden="true" style={{ height: runwayHeight }}>
+          <div data-scrollytelling>
+            {/*
+              The opening frame as a plain image, rendered at build time. It is
+              what the page paints first, what a link preview shows, and what a
+              visitor with scripting disabled gets — none of which the engine
+              could produce, because it does not run in any of those cases.
+
+              The data attribute is the handshake: the engine adopts this
+              element instead of creating a second one. Do not remove it.
+            */}
+            <img
+              data-scrollytelling-poster
+              src={framePath(sequence.id, 0)}
+              alt=""
+              style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover"
+            />
+          </div>
+        </div>
+      ) : (
+        <div class="no-frames">
+          <div>
+            <p>No frames yet.</p>
+            <p>Generate a sequence to make this page scroll:</p>
+            <code>scrollytelling frames &lt;video&gt; .</code>
+          </div>
+        </div>
+      )
+    }
+
+    <script>
+      import { SEQUENCES, framePath } from "../components/frames.js";
+      import { story } from "../components/story.js";
+      import { mount } from "../lib/scroll-engine.mjs";
+
+      const container = document.querySelector("[data-scrollytelling]");
+      if (container) mount(container, { sequences: SEQUENCES, story, framePath });
+    </script>
+
+    <style is:global>
+      :root {
+        /* Replaced at runtime by each frame's own edge colour, so the canvas
+           has no visible edge against the page. */
+        --page-bg: #050505;
+        color-scheme: dark;
+      }
+      html,
+      body {
+        margin: 0;
+        background: var(--page-bg);
+        font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      [data-scrollytelling] {
+        position: sticky;
+        top: 0;
+        height: 100vh;
+        width: 100%;
+      }
+      .no-frames {
+        display: grid;
+        min-height: 100vh;
+        place-items: center;
+        padding: 0 1.5rem;
+        text-align: center;
+        color: rgb(255 255 255 / 0.9);
+      }
+      .no-frames code {
+        display: inline-block;
+        border-radius: 0.25rem;
+        background: rgb(255 255 255 / 0.05);
+        padding: 0.5rem 0.75rem;
+        color: rgb(255 255 255 / 0.7);
+      }
+    </style>
+  </body>
+</html>

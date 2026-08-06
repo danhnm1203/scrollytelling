@@ -60,6 +60,68 @@ async function runCapturing(positionals, flags = {}) {
   }
 }
 
+describe("scaffold — the Astro template", () => {
+  it("generates a project laid out the way Astro expects", async () => {
+    const dir = join(tempDir(), "site");
+    const { code } = await runCapturing([dir], { template: "astro" });
+    assert.equal(code, 0);
+
+    for (const f of [
+      "package.json",
+      "astro.config.mjs",
+      "src/pages/index.astro",
+      "src/components/frames.js",
+      "src/lib/scroll-engine.mjs",
+    ]) {
+      assert.ok(existsSync(join(dir, f)), `${f} must exist`);
+    }
+  });
+
+  it("puts the worker beside the engine", async () => {
+    const dir = join(tempDir(), "site");
+    await runCapturing([dir], { template: "astro" });
+
+    assert.ok(existsSync(join(dir, "src/lib/scroll-engine.mjs")));
+    assert.ok(existsSync(join(dir, "src/lib/decoder.worker.js")));
+  });
+
+  it("builds its own outline rather than needing one written in", async () => {
+    // Astro renders at build time, so index.astro maps the story itself. Only
+    // the template with no render step needs `frames` to write the outline.
+    const dir = join(tempDir(), "site");
+    await runCapturing([dir], { template: "astro" });
+
+    const page = readFileSync(join(dir, "src/pages/index.astro"), "utf8");
+    assert.match(page, /story\.sections\.map/, "the outline comes from the story");
+    assert.match(page, /class="story-outline"/);
+    assert.match(page, /data-scrollytelling-poster/, "the server-rendered first frame");
+    assert.ok(!/scrollytelling:outline/.test(page), "no generated block is needed here");
+  });
+
+  it("checks its JavaScript, so a mistyped beat still fails the build", async () => {
+    const dir = join(tempDir(), "site");
+    await runCapturing([dir], { template: "astro" });
+
+    const tsconfig = JSON.parse(
+      readFileSync(join(dir, "tsconfig.json"), "utf8").replace(/^\s*\/\/.*$/gm, ""),
+    );
+    assert.equal(tsconfig.compilerOptions.checkJs, true);
+    assert.ok(
+      tsconfig.exclude.some((e) => e.includes("decoder.worker")),
+      "the worker cannot be checked against DOM globals",
+    );
+  });
+
+  it("commits the frames", async () => {
+    const dir = join(tempDir(), "site");
+    await runCapturing([dir], { template: "astro" });
+
+    const ignore = readFileSync(join(dir, ".gitignore"), "utf8");
+    assert.match(ignore, /^!public\/frames\//m);
+    assert.match(ignore, /^!\.scrollytelling-version$/m);
+  });
+});
+
 describe("scaffold — the no-build template", () => {
   it("generates a page that needs nothing installed", async () => {
     const dir = join(tempDir(), "site");
