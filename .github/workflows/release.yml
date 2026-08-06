@@ -118,3 +118,43 @@ jobs:
       - run: npm publish --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Turn the tag into a GitHub release.
+  #
+  # Added after v0.3.0 and v0.4.0 both shipped to npm while the releases page
+  # still read v0.2.0. The tags were pushed and the packages published; nothing
+  # in this workflow ever created a release, so the one page most people look at
+  # was two versions stale.
+  #
+  # Last, and gated on the npm job, so a release only ever describes something
+  # that actually published. A release pointing at a version npm rejected is
+  # worse than no release.
+  github-release:
+    needs: [npm]
+    if: github.event_name == 'push' && needs.npm.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # creating a release is a write to the repository
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # Notes come from CHANGELOG.md rather than from generated commit titles:
+      # the changelog is written for someone deciding whether to upgrade, and a
+      # list of commit subjects is not. Missing or empty section exits non-zero
+      # rather than publishing a blank release body, which would read as
+      # "nothing changed" instead of "nobody wrote it down".
+      - name: Take the notes from the changelog
+        run: node ci/changelog-notes.mjs "${GITHUB_REF_NAME}" > /tmp/notes.md
+
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" \
+            --title "${GITHUB_REF_NAME}" \
+            --notes-file /tmp/notes.md \
+            --verify-tag
