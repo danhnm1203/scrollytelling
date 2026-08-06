@@ -137,12 +137,14 @@ Constraints that hold while you build it:
 - **Reuse the frames you already encoded** for static section imagery. They are
   in `public/frames/`, already sized and optimised. Pulling fresh stills with
   ffmpeg means shipping another copy of the same pixels.
-- **Keep `app/page.tsx`'s outline as the only `<h1>`.** Section headings are
+- **Keep the story outline as the only `<h1>`.** It lives in `app/page.tsx` on
+  `next`, `src/pages/index.astro` on `astro`, and `index.html` on `html`. Section headings are
   `<h2>`. The canvas is `aria-hidden` decoration; the outline is what a screen
   reader and a crawler actually read.
 - **Honour `prefers-reduced-motion`** in anything you add. The hero already does
-  — see below — and `globals.css` neutralises transitions and animations
-  page-wide in that mode, so a reveal wrapper inherits the right behaviour. What
+  — see below — and `lib/scroll-engine.css` neutralises transitions and
+  animations page-wide in that mode, so a reveal wrapper inherits the right
+  behaviour on every template. What
   it cannot do for you is content that moves without a CSS transition: a
   count-up, a carousel, an autoplaying video. Gate those yourself.
 - Server components by default. Only what listens to scroll is `"use client"`.
@@ -156,8 +158,8 @@ that had to be patched. Move `at`, add a beat, delete one — nothing else chang
 ## How the scrub is driven
 
 Native scroll, read in a `requestAnimationFrame` loop. The drawn position eases
-toward the scroll position over `SCRUB_SECONDS` (`components/ScrollSequence.tsx`,
-0.35 by default) rather than locking to it 1:1, which is what stops a coarse
+toward the scroll position over `SCRUB_SECONDS` (`lib/scroll-engine.mjs`, 0.35 by
+default) rather than locking to it 1:1, which is what stops a coarse
 sequence from stepping under a fast flick. The loop stops once it has caught up,
 so an idle page schedules no frames at all — verify that if you touch the loop:
 
@@ -185,9 +187,9 @@ Three things follow from this that are easy to get wrong:
 ## Reduced motion
 
 A visitor with `prefers-reduced-motion: reduce` does not get a slower scrub, they
-get a different page: one still, and the story outline from `app/page.tsx`
-promoted from screen-reader-only to the page itself. `ScrollSequence` starts no
-worker, decodes nothing, adds no scroll listener and renders no runway.
+get a different page: one still, and the story outline promoted from
+screen-reader-only to the page itself. The engine starts no worker, decodes
+nothing, adds no scroll listener and renders no runway.
 
 This is deliberate, and it costs the reader nothing — the outline is the same
 copy in the same order, which is the reason to keep it truthful as you edit the
