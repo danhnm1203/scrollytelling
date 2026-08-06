@@ -5,7 +5,7 @@ Notable changes to `@danhnm1203/scrollytelling`.
 This file starts at 0.2.0. Earlier releases predate it and are not reconstructed
 here — inventing history is worse than admitting it was not kept.
 
-## Unreleased
+## 0.4.0
 
 ### Added
 
