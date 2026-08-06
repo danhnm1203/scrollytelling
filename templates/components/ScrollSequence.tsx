@@ -3,12 +3,20 @@
 /**
  * The scrubbing canvas.
  *
- *   scroll ──▶ progress ──▶ frame index ──┬─▶ draw that frame
- *                                         └─▶ interpolate the page background
+ *   viewport ──▶ canvasSize ──▶ backing store + transform
  *
- * All the arithmetic lives in lib/scroll-math, which is testable without a
- * browser. This file is the part that cannot be: it owns the canvas, the
- * listener and the animation frame, and nothing else.
+ *   scroll ──▶ target ──▶ nextEased ──▶ eased ──┬─▶ frameIndex ──▶ nearestDecoded
+ *                                               │                       │
+ *                                               │                       ▼
+ *                                               │                   drawRect ──▶ draw
+ *                                               ├─▶ backgroundColor ──▶ page bg
+ *                                               ├─▶ windowDiff ──▶ fetch / release
+ *                                               └─▶ fadeOpacity ──▶ beats
+ *
+ * All the arithmetic lives in lib/scroll-math and lib/scroll-engine-state, both
+ * testable without a browser. This file is the part that cannot be: it owns the
+ * canvas, the worker, the listeners and the animation frame, and nothing else.
+ * Every decision above is made elsewhere and merely applied here.
  *
  * The background is the point. Painting the page with each frame's own border
  * color, interpolated between frames, is what stops the canvas showing as a
@@ -33,28 +41,29 @@ import { useEffect, useRef, useState } from "react";
 
 import { SEQUENCES, framePath, type Sequence } from "@/components/frames";
 import { story, type Beat } from "@/components/story";
-import { decodeStrategy, framesToRetry } from "@/lib/scroll-engine-state";
+import {
+  backgroundColor,
+  canvasSize,
+  decodeStrategy,
+  drawRect,
+  framesToRetry,
+  loadStateAfter,
+  nearestDecoded,
+  nextEased,
+  windowDiff,
+  type LoadState,
+} from "@/lib/scroll-engine-state";
 import {
   computeScale,
-  damp,
-  decodeWindow,
   fadeOpacity,
   framesInBudget,
   frameIndex,
-  hasSettled,
-  lerpColor,
   scrimOpacity,
   scrollHeightVh,
   scrollProgress,
   selectSequence,
   visibleRect,
 } from "@/lib/scroll-math";
-
-/** Beyond this, more pixels cost more than they show. */
-const MAX_DPR = 2;
-
-/** Subjects usually sit a little above centre. */
-const VERTICAL_ANCHOR = 0.45;
 
 /** Once someone has scrolled this far, they know the page scrolls. */
 const HINT_FADES_AT = 0.02;
@@ -83,11 +92,6 @@ const SCRUB_SECONDS = 0.35;
  * frame count it buys depends entirely on the sequence's resolution.
  */
 const DECODE_BUDGET_BYTES = 96 * 1024 * 1024;
-
-type LoadState =
-  | { status: "loading"; done: number; total: number }
-  | { status: "ready"; failed: number[] }
-  | { status: "failed" };
 
 /**
  * Whether the visitor has asked their system for reduced motion.
@@ -137,7 +141,7 @@ export function ScrollSequence() {
   // scripting disabled would see.
   const [sequence, setSequence] = useState<Sequence | null>(SEQUENCES[0] ?? null);
   const [load, setLoad] = useState<LoadState>({
-    status: "loading",
+    phase: "loading",
     done: 0,
     total: SEQUENCES[0]?.totalFrames ?? 0,
   });
@@ -195,7 +199,7 @@ export function ScrollSequence() {
 
     const capacity = framesInBudget(DECODE_BUDGET_BYTES, sequence.width, sequence.height);
     const initial = Math.min(sequence.totalFrames, Math.max(1, Math.ceil(capacity / 2)));
-    setLoad({ status: "loading", done: 0, total: initial });
+    setLoad({ phase: "loading", done: 0, total: initial });
 
     const worker = makeWorker();
     let settledInitial = 0;
@@ -213,25 +217,27 @@ export function ScrollSequence() {
       if (bitmap) frames.set(index, bitmap);
       else failed.add(index);
 
-      if (index < initial) {
-        settledInitial++;
-        if (settledInitial < initial) {
-          setLoad({ status: "loading", done: settledInitial, total: initial });
-        } else if (failed.size >= initial) {
-          setLoad({ status: "failed" });
-        } else {
-          if (failed.size > 0) warnFailed(failed);
-          setLoad({ status: "ready", failed: [...failed] });
-        }
+      if (index < initial) settledInitial++;
+
+      // Hand it every failure and let it narrow to the opening window. Keeping
+      // a second set here and picking between them is the version of this that
+      // goes quietly wrong.
+      const next = loadStateAfter({ index, initial, settled: settledInitial, failed });
+      if (next) {
+        // Warn about every frame that has failed, not only the opening ones —
+        // the visitor sees the gap wherever it is.
+        if (next.phase === "ready" && failed.size > 0) warnFailed(failed);
+        setLoad(next);
       }
+
       scheduleDrawRef.current?.();
     };
 
     // Decode here rather than in the worker. img.decode() still keeps the work
     // off the paint path, it just cannot be moved off the thread entirely.
     //
-    // Separate from request() because the worker-failure path calls it for
-    // frames that are already pending, which request() would skip.
+    // Separate from requestFrame because the worker-failure path calls it for
+    // frames that are already pending, which would otherwise be double-counted.
     const decodeOnMainThread = (index: number) => {
       const img = new Image();
       img.decoding = "async";
@@ -242,8 +248,10 @@ export function ScrollSequence() {
         .catch(() => arrived(index, null));
     };
 
-    const request = (index: number) => {
-      if (frames.has(index) || pending.has(index) || failed.has(index)) return;
+    // Unconditional: windowDiff has already excluded anything held, in flight,
+    // or known broken. Filtering again here would put that rule in two places
+    // and let them disagree.
+    const requestFrame = (index: number) => {
       pending.add(index);
 
       if (decodeStrategy({ canUseWorker: Boolean(worker), workerFailed }) === "worker") {
@@ -298,13 +306,21 @@ export function ScrollSequence() {
 
     // Called from the draw loop: keep the window populated, release the rest.
     ensureWindowRef.current = (centre: number) => {
-      const w = decodeWindow(centre, sequence.totalFrames, capacity);
-      for (let i = w.from; i <= w.to; i++) request(i);
-      for (const [index, bitmap] of frames) {
-        if (index < w.from || index > w.to) {
-          if ("close" in bitmap) bitmap.close();
-          frames.delete(index);
-        }
+      const { request, release } = windowDiff({
+        centre,
+        totalFrames: sequence.totalFrames,
+        capacity,
+        held: frames.keys(),
+        pending,
+        failed,
+      });
+
+      for (const index of request) requestFrame(index);
+
+      for (const index of release) {
+        const bitmap = frames.get(index);
+        if (bitmap && "close" in bitmap) bitmap.close();
+        frames.delete(index);
       }
     };
 
@@ -330,7 +346,7 @@ export function ScrollSequence() {
   // Draw. One draw per animation frame at most: scrolling fires far more often
   // than the screen refreshes, and drawing per event just queues work.
   useEffect(() => {
-    if (!sequence || reducedMotion || load.status !== "ready") return;
+    if (!sequence || reducedMotion || load.phase !== "ready") return;
 
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -340,13 +356,19 @@ export function ScrollSequence() {
     const draw = (now: number) => {
       rafRef.current = 0;
 
-      const dpr = Math.min(MAX_DPR, devicePixelRatio || 1);
       const vw = innerWidth;
       const vh = innerHeight;
 
-      if (canvas.width !== Math.round(vw * dpr) || canvas.height !== Math.round(vh * dpr)) {
-        canvas.width = Math.round(vw * dpr);
-        canvas.height = Math.round(vh * dpr);
+      const backing = canvasSize({
+        viewportWidth: vw,
+        viewportHeight: vh,
+        devicePixelRatio,
+      });
+      // Assigning either dimension clears the canvas, so only touch it when it
+      // actually changed.
+      if (canvas.width !== backing.width || canvas.height !== backing.height) {
+        canvas.width = backing.width;
+        canvas.height = backing.height;
       }
 
       // Where the visitor is, which is not the same as what gets drawn.
@@ -356,23 +378,24 @@ export function ScrollSequence() {
       const target = scrollProgress(scrollY, document.body.scrollHeight, vh);
       progressRef.current = target;
 
-      // The first paint of a run snaps. Easing from wherever the last run
-      // stopped would sweep the whole sequence on a mid-page reload, and on a
-      // rotation would fight the scroll restore that just ran.
       const step = lastPaintRef.current ? now - lastPaintRef.current : 0;
       lastPaintRef.current = now;
 
-      let eased = primedRef.current
-        ? damp(easedRef.current, target, SCRUB_SECONDS, step)
-        : target;
+      const { eased, animating } = nextEased({
+        previous: easedRef.current,
+        target,
+        primed: primedRef.current,
+        seconds: SCRUB_SECONDS,
+        deltaMs: step,
+        totalFrames: sequence.totalFrames,
+      });
       primedRef.current = true;
-      if (hasSettled(eased, target, sequence.totalFrames)) eased = target;
       easedRef.current = eased;
 
       // Scheduled here rather than at the end: the draw below returns early
       // when no frame is decoded yet, and stopping the loop there would leave
       // the sequence parked wherever it had eased to.
-      if (eased !== target) schedule();
+      if (animating) schedule();
 
       // Everything the page renders comes off the eased position, so the
       // frame, the background, the beats and the progress bar stay in step
@@ -381,14 +404,11 @@ export function ScrollSequence() {
       frameRef.current = exact;
       setProgress(eased);
 
-      const lo = Math.floor(exact);
-      const hi = Math.min(sequence.totalFrames - 1, Math.ceil(exact));
-
-      const bg = lerpColor(sequence.edgeColors[lo], sequence.edgeColors[hi], exact - lo);
+      const bg = backgroundColor({ sequence, exact });
       const css = `rgb(${bg[0]} ${bg[1]} ${bg[2]})`;
       document.documentElement.style.setProperty("--page-bg", css);
 
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.setTransform(backing.ratio, 0, 0, backing.ratio, 0, 0);
       ctx.fillStyle = css;
       ctx.fillRect(0, 0, vw, vh);
 
@@ -399,17 +419,16 @@ export function ScrollSequence() {
       // the normal case now, not an edge case: frames beyond the window are
       // deliberately not held.
       const held = framesRef.current;
-      const nearest = Math.round(exact);
-      let img = held.get(nearest);
-      for (let d = 1; d < sequence.totalFrames && !img; d++) {
-        img = held.get(nearest - d) ?? held.get(nearest + d);
-      }
+      const index = nearestDecoded({ exact, held: held.keys(), totalFrames: sequence.totalFrames });
+      if (index === null) return;
+
+      // Satisfying the Map's return type rather than handling a real case:
+      // the index came out of held.keys(), so it is present by construction.
+      const img = held.get(index);
       if (!img) return;
 
-      const scale = computeScale(vw, vh, sequence);
-      const w = sequence.width * scale;
-      const h = sequence.height * scale;
-      ctx.drawImage(img, (vw - w) / 2, (vh - h) * VERTICAL_ANCHOR, w, h);
+      const rect = drawRect({ viewportWidth: vw, viewportHeight: vh, sequence });
+      ctx.drawImage(img, rect.x, rect.y, rect.width, rect.height);
     };
 
     function schedule() {
@@ -433,13 +452,13 @@ export function ScrollSequence() {
       rafRef.current = 0;
       scheduleDrawRef.current = null;
     };
-  }, [sequence, reducedMotion, load.status]);
+  }, [sequence, reducedMotion, load.phase]);
 
   if (!sequence) return <NoFrames reason="empty" />;
   if (reducedMotion) return <StillHero sequence={sequence} />;
-  if (load.status === "failed") return <NoFrames reason="failed" />;
+  if (load.phase === "failed") return <NoFrames reason="failed" />;
 
-  const ready = load.status === "ready";
+  const ready = load.phase === "ready";
 
   return (
     <div aria-hidden style={{ height: `${scrollHeightVh(sequence.totalFrames)}vh` }}>
