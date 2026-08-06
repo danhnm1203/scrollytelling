@@ -173,11 +173,16 @@ async function main() {
       );
     }
 
-    log(`[${template}] OK — worker, stylesheet, reduced-motion rules and frames all emitted`);
+    const how = plan.build ? "built output" : "scaffolded tree (this template has no build)";
+    log(`[${template}] OK — worker, stylesheet, reduced-motion rules and frames all in the ${how}`);
   } finally {
-    // Best effort. A gate that fails because it could not delete a temp
-    // directory reports the wrong problem.
-    await rm(dir, { recursive: true, force: true }).catch(() => {});
+    // Best effort: a gate that fails because it could not delete a temp
+    // directory reports the wrong problem. Said out loud all the same — a
+    // cleanup that quietly stops working fills a CI runner's disk over weeks,
+    // and this repository does not have silent failures.
+    await rm(dir, { recursive: true, force: true }).catch((error) => {
+      log(`[${template}] warning: could not remove ${dir} — ${error.message}`);
+    });
   }
 }
 
