@@ -25,11 +25,12 @@
  * question "where did this person come from" is answerable only if the forms
  * keep asking it.
  *
- * A later slice extends this file with the README. It is not asserted yet.
+ * The README is asserted for its links only. What sits above its fold is a later
+ * slice; that it does not point at pages which have moved is this one.
  */
 
 import assert from "node:assert/strict";
-import { readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { describe, it } from "node:test";
 
 const read = (path) => readFileSync(new URL(path, import.meta.url), "utf8");
@@ -37,6 +38,47 @@ const pkg = JSON.parse(read("../package.json"));
 const plugin = JSON.parse(read("../.claude-plugin/plugin.json"));
 const marketplace = JSON.parse(read("../.claude-plugin/marketplace.json"));
 const skill = read("../skills/scrollytelling/SKILL.md");
+const readme = read("../README.md");
+
+/** Every markdown link in `text`, as `{ label, target }`. */
+function linksIn(text) {
+  return [...text.matchAll(/\[([^\]]+)\]\(([^)\s]+)\)/g)].map((m) => ({
+    label: m[1],
+    target: m[2],
+  }));
+}
+
+/**
+ * GitHub's heading slug: lowercased, punctuation dropped, spaces hyphenated.
+ * Close enough for the headings this repo writes, and the failure mode is a
+ * test that complains about a link that works — not one that misses a link
+ * that does not.
+ */
+function slug(heading) {
+  return heading
+    .trim()
+    .toLowerCase()
+    .replace(/[^\w\s-]/g, "")
+    .replace(/\s+/g, "-");
+}
+
+/**
+ * Every anchor a reader can jump to within `markdown`. Fenced blocks are cut
+ * first: this repo's shell samples are full of `# comments`, and counting those
+ * as headings would let a link resolve against a bash comment.
+ */
+function anchorsIn(markdown) {
+  const prose = markdown.replace(/^```[\s\S]*?^```/gm, "");
+  return new Set([...prose.matchAll(/^#{1,6}\s+(.+)$/gm)].map((m) => slug(m[1])));
+}
+
+/** A link into this repository, rather than out to the web or within a page. */
+const isRelative = (target) => !/^(https?:|mailto:|#)/.test(target);
+
+/** The pages the README sent its longer sections to. */
+const docsEn = new URL("../docs/en/", import.meta.url);
+const relocatedPages = readdirSync(docsEn).filter((f) => f.endsWith(".md"));
+
 /**
  * Every issue form, read from the directory rather than named one by one. The
  * attribution rule below applies to *every* form, so a form added later has to
@@ -169,6 +211,65 @@ describe("the npm package metadata", () => {
   it("still points at the repository it lives in", () => {
     // Cheap, but this is the only link npm shows before a homepage exists.
     assert.match(pkg.repository.url, /github\.com\/danhnm1203\/scrollytelling/);
+  });
+});
+
+describe("the README's links", () => {
+  // Sections that outgrew the README now live in docs/en/. Moving prose is
+  // safe; leaving a link behind that points at where it used to be is the one
+  // way that move fails, and it fails silently — a 404 only the reader sees.
+  const targets = linksIn(readme).map((l) => l.target);
+
+  /**
+   * Every link to check, flattened across the README and the pages it sent
+   * prose to. One list rather than one test per page: a page that happens to
+   * carry no links would otherwise report green having asserted nothing.
+   */
+  const checks = [
+    { from: "README.md", text: readme, base: new URL("../", import.meta.url) },
+    ...relocatedPages.map((file) => ({
+      from: `docs/en/${file}`,
+      text: read(`../docs/en/${file}`),
+      base: docsEn,
+    })),
+  ].flatMap(({ from, text, base }) =>
+    linksIn(text)
+      .map((l) => l.target)
+      .filter(isRelative)
+      .map((target) => ({ from, target, base })),
+  );
+
+  it("all resolve to a file, and to a heading when they name one", () => {
+    assert.ok(checks.length > 0, "expected links to check — found none at all");
+    for (const { from, target, base } of checks) {
+      const [path, anchor] = target.split("#");
+      assert.ok(existsSync(new URL(path, base)), `${from} links to missing ${path}`);
+      if (anchor) {
+        const page = readFileSync(new URL(path, base), "utf8");
+        assert.ok(anchorsIn(page).has(anchor), `${from}: ${path} has no heading "#${anchor}"`);
+      }
+    }
+  });
+
+  it("point at headings this README still has", () => {
+    // The contents list is the first casualty of moving a section out.
+    const own = anchorsIn(readme);
+    const internal = targets.filter((t) => t.startsWith("#"));
+    assert.ok(internal.length > 0, "expected a contents list linking within the README");
+    for (const target of internal) {
+      assert.ok(own.has(target.slice(1)), `README links to its own missing "${target}"`);
+    }
+  });
+
+  it("reach every page that was moved out of it", () => {
+    // A relocated page nobody links to is a deleted page with extra steps.
+    assert.ok(relocatedPages.length > 0, "expected relocated pages under docs/en/");
+    for (const file of relocatedPages) {
+      assert.ok(
+        targets.some((t) => t.startsWith(`docs/en/${file}`)),
+        `docs/en/${file} is not linked from the README`,
+      );
+    }
   });
 });
 
