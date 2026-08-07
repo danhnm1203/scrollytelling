@@ -28,6 +28,17 @@ test("--help exits 0 and lists both commands", async () => {
   assert.match(stdout, /frames/);
 });
 
+test("--help names every stack it can generate, not just one", async () => {
+  // The help text is the first thing a stranger reads after installing. Naming
+  // one framework when four have shipped tells the other three the tool is not
+  // for them, and nothing about that failure is loud. The same rule is applied
+  // to the published descriptions in distribution-assets.test.js.
+  const { stdout } = await cli(["--help"]);
+  for (const stack of ["next", "nuxt", "astro", "html"]) {
+    assert.match(stdout, new RegExp(`\\b${stack}\\b`, "i"), `--help does not name ${stack}`);
+  }
+});
+
 test("no arguments prints help rather than a stack trace", async () => {
   const { code, stdout, stderr } = await cli([]);
   assert.equal(code, 0);

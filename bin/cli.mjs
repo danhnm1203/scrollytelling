@@ -4,7 +4,8 @@ import { fileURLToPath } from "node:url";
 
 import { parseArgs, UsageError } from "../lib/cli-args.mjs";
 
-const HELP = `scrollytelling — turn a video into a scroll-scrubbed Next.js landing page
+const HELP = `scrollytelling — turn a video into a scroll-scrubbed hero page
+                 (Next, Nuxt, Astro or plain HTML)
 
 Usage
   scrollytelling scaffold <project_dir> [--template <name>] [--force] [--diff]
