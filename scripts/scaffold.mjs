@@ -59,6 +59,12 @@ const RENAMES = new Map([["gitignore.template", ".gitignore"]]);
 const RUNTIME_FILES = [
   "scroll-math.mjs",
   "scroll-math.d.ts",
+  // Not runtime — every template reads this during ITS OWN build, to fill the
+  // head. It rides here because the reason is the same: four templates each
+  // deciding what a link preview contains is four chances to drift, and the
+  // drift is invisible because every page still renders.
+  "social-card.mjs",
+  "social-card.d.ts",
   "scroll-engine-state.mjs",
   "scroll-engine-state.d.ts",
   "scroll-engine.mjs",
@@ -130,9 +136,28 @@ function byCodePoint(a, b) {
 }
 
 /** Every file under `templates/`, as paths relative to it. */
+/**
+ * What a framework leaves behind in a template directory while someone works
+ * on it, and which must never reach a generated project.
+ *
+ * `.gitignore` covers these for this repository, but `files` in package.json is
+ * an ALLOWLIST — it names `templates`, and that wins. `npm pack` was shipping
+ * `templates/next/tsconfig.tsbuildinfo`, so an install carried one machine's
+ * TypeScript build cache and scaffold copied it into every generated project.
+ * A stale .tsbuildinfo makes tsc skip files it believes are unchanged, so a
+ * fresh project's type errors go unreported — a failure that looks like success.
+ */
+const BUILD_ARTIFACTS = new Set([".next", ".nuxt", ".astro", ".output", "dist", "node_modules"]);
+
+/** Whether a name inside templates/ belongs in a generated project. */
+export function isTemplateFile(name) {
+  return !BUILD_ARTIFACTS.has(name) && !name.endsWith(".tsbuildinfo");
+}
+
 function templateFiles(dir, prefix = "") {
   const out = [];
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    if (!isTemplateFile(entry.name)) continue;
     const rel = prefix ? `${prefix}/${entry.name}` : entry.name;
     if (entry.isDirectory()) out.push(...templateFiles(join(dir, entry.name), rel));
     else out.push(rel);
