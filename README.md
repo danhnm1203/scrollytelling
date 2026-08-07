@@ -2,17 +2,22 @@
 
 # scrollytelling
 
-**Turn a video into a scroll-scrubbed landing page.**
+**Turn a video you already have into a complete hero page, in one command.**
 
-The clip advances frame by frame as the visitor scrolls, with copy fading in over
-it. Every frame is measured while it is encoded, so the page has no visible seams
-on any footage.
+The clip advances frame by frame as the visitor scrolls, with your copy fading in
+over it. Every frame is measured as it is encoded, so the text stays readable and
+the page has no visible seams — on your footage, not just on a showreel.
+
+**Next · Nuxt · Astro · plain HTML.** No accounts, no API keys, no runtime
+dependency beyond the framework you already chose.
+
+```bash
+npx @danhnm1203/scrollytelling scaffold ./my-site
+```
 
 [![test](https://github.com/danhnm1203/scrollytelling/actions/workflows/test.yml/badge.svg)](https://github.com/danhnm1203/scrollytelling/actions/workflows/test.yml)
 [![node](https://img.shields.io/badge/node-%E2%89%A520-3c873a)](https://nodejs.org)
 [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
-
-No accounts, no API keys, nothing to install system-wide.
 
 </div>
 
@@ -43,11 +48,10 @@ package and bring their own binaries.
 
 ## Installation
 
-```bash
-# Run it without installing — first run takes a minute, then it is cached
-npx @danhnm1203/scrollytelling <command>
+The command at the top of this file runs without installing anything — the first
+run takes a minute, then it is cached. If you will use it more than once:
 
-# Or install it, if you will use it more than once
+```bash
 npm i -g @danhnm1203/scrollytelling
 ```
 
@@ -332,6 +336,22 @@ baseline to compare against and can only tell you to re-scaffold.
 
 `public/frames/` is committed rather than gitignored, which is unusual enough to
 be worth a page of its own: [Frames are committed to git](docs/en/frames-in-git.md).
+
+## Gallery
+
+Pages built with this tool.
+
+<!-- Entries land here from the "Show your page" form. Nothing goes in without
+     the submitter having ticked the gallery checkbox on that form. -->
+
+*Nothing here yet — yours could be first.*
+
+**[Show the page you built →](https://github.com/danhnm1203/scrollytelling/issues/new?template=show-your-page.yml)**
+
+Every entry says who built it, and pages submitted by other people are theirs:
+listed only when the form's gallery checkbox was ticked, credited to whoever made
+them, and **removed within 24 hours of the owner asking** — reply on your issue,
+or open a new one.
 
 ## Working on this repository
 
