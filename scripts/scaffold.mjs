@@ -52,13 +52,21 @@ const RENAMES = new Map([["gitignore.template", ".gitignore"]]);
 /**
  * Files copied from outside `templates/`, as [source, path in the project].
  *
+ * Named for when they are COPIED, not for when they run: most are runtime, but
+ * social-card.mjs is read by three templates during their own build.
+ *
  * The display math is deliberately NOT duplicated under templates/. One copy
  * in this repo means it cannot drift from the version the tests cover — a
  * checked-in duplicate would be a fork the moment someone edited one of them.
  */
-const RUNTIME_FILES = [
+const INSTALLED_FILES = [
   "scroll-math.mjs",
   "scroll-math.d.ts",
+  // Read at each template's own build time rather than at runtime, and here for
+  // the same reason as the rest: one copy cannot drift from the one the tests
+  // cover.
+  "social-card.mjs",
+  "social-card.d.ts",
   "scroll-engine-state.mjs",
   "scroll-engine-state.d.ts",
   "scroll-engine.mjs",
@@ -129,10 +137,29 @@ function byCodePoint(a, b) {
   return 0;
 }
 
+/**
+ * What a framework leaves behind in a template directory while someone works
+ * on it, and which must never reach a generated project.
+ *
+ * `.gitignore` covers these for this repository, but `files` in package.json is
+ * an ALLOWLIST — it names `templates`, and that wins. `npm pack` was shipping
+ * `templates/next/tsconfig.tsbuildinfo`, so an install carried one machine's
+ * TypeScript build cache and scaffold copied it into every generated project.
+ * A stale .tsbuildinfo makes tsc skip files it believes are unchanged, so a
+ * fresh project's type errors go unreported — a failure that looks like success.
+ */
+const BUILD_ARTIFACTS = new Set([".next", ".nuxt", ".astro", ".output", "dist", "node_modules"]);
+
+/** Whether a name inside templates/ belongs in a generated project. */
+export function isTemplateFile(name) {
+  return !BUILD_ARTIFACTS.has(name) && !name.endsWith(".tsbuildinfo");
+}
+
 /** Every file under `templates/`, as paths relative to it. */
 function templateFiles(dir, prefix = "") {
   const out = [];
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    if (!isTemplateFile(entry.name)) continue;
     const rel = prefix ? `${prefix}/${entry.name}` : entry.name;
     if (entry.isDirectory()) out.push(...templateFiles(join(dir, entry.name), rel));
     else out.push(rel);
@@ -163,7 +190,7 @@ function installableFiles(templateName = DEFAULT_TEMPLATE) {
     // moving templates/* into templates/next/ needs no migration of an existing
     // .scrollytelling-version: every recorded key is byte-identical.
     ...templateFiles(root).map((rel) => [join(root, rel), targetName(rel)]),
-    ...RUNTIME_FILES.map((name) => [
+    ...INSTALLED_FILES.map((name) => [
       fileURLToPath(new URL(`../lib/${name}`, import.meta.url)),
       `${template.libDir}/${name}`,
     ]),

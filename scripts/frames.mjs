@@ -33,6 +33,9 @@ import { tmpdir } from "node:os";
 import { basename, dirname, extname, join } from "node:path";
 
 import { edgeColor, lumaGrid, LUMA_COLS, LUMA_ROWS } from "../lib/measure.mjs";
+// Defined in lib/ rather than here because three templates refer to this file
+// during their own builds and none of them can import the CLI.
+import { CARD_FILE, CARD_WIDTH, CARD_HEIGHT } from "../lib/social-card.mjs";
 import { naturalCompare, decimate, timestampsFor } from "../lib/sequence-plan.mjs";
 import { DEFAULT_TEMPLATE, resolveTemplate } from "../lib/template-manifest.mjs";
 import { replaceOutline } from "../lib/outline.mjs";
@@ -380,6 +383,10 @@ function planSequences({ width, height, maxWidth, focus, skipPortrait }) {
   return plans;
 }
 
+// Re-exported because this is where the card is written; the value lives in
+// lib/ so three templates can name the same file without importing the CLI.
+export { CARD_FILE };
+
 /* -------------------------------------------------------------- contract -- */
 
 /**
@@ -435,7 +442,7 @@ function templateFor(projectDir, override, { strict }) {
  * Only the block between the markers; everything else on that page belongs to
  * whoever generated the project.
  */
-function writeOutline(projectDir, template) {
+function writeOutline(projectDir, template, options) {
   const pagePath = join(projectDir, template.outlinePath);
   const storyPath = join(projectDir, template.storyPath);
 
@@ -444,7 +451,7 @@ function writeOutline(projectDir, template) {
   try {
     const story = parseStory(readFileSync(storyPath, "utf8"));
     const page = readFileSync(pagePath, "utf8");
-    writeFileSync(pagePath, replaceOutline(page, story));
+    writeFileSync(pagePath, replaceOutline(page, story, options));
   } catch (err) {
     // Loud, not fatal. The frames themselves encoded fine and the page will
     // still scrub; what is stale is the copy a screen reader gets, and saying
@@ -499,7 +506,69 @@ export function framePathSource(publicDir) {
       };
 }
 
-export function renderContract(sequences, publicDir) {
+/**
+ * Writes the card, from the frame the page opens on.
+ *
+ * Frame 0 on purpose: it is the poster, so the preview and the first thing a
+ * visitor sees are the same moment. A preview showing a moment the page never
+ * opens on is a small lie, and the kind nobody notices until they compare.
+ *
+ * The source frame, not the encoded webp — it has not been resized yet, so the
+ * card is cut from more pixels than the page ever shows.
+ *
+ * Cover-fit rather than letterboxed. Bars around a 16:9 frame inside a 1.91:1
+ * card read as a broken image at thumbnail size. The crop is centred, which
+ * matches the landscape sequence because that one is never cropped (`crop:
+ * null` in planSequences); `--focus` aims the PORTRAIT crop only, so a phone
+ * visitor can see a differently-framed image than the card. That is accepted:
+ * one card cannot be two crops, and the landscape framing is the one a link
+ * preview is sized for.
+ */
+async function writeCard(sharp, sourceFrame, target) {
+  await sharp(sourceFrame)
+    .resize(CARD_WIDTH, CARD_HEIGHT, { fit: "cover", position: "centre" })
+    .jpeg({ quality: 82, mozjpeg: true })
+    .toFile(target);
+}
+
+/**
+ * The SITE_URL block, or nothing at all when nobody said where the site lives.
+ *
+ * Nothing rather than `= null` on purpose. The stub in templates/ is what the
+ * upgrade record hashes, so a project that has run `frames` only stays out of
+ * `scaffold --diff` while the stub is untouched: change it and every existing
+ * project is told its GENERATED contract "changed in the template AND was
+ * edited by you", with adopting offered as the fix — which would swap real
+ * measured sequences for an empty placeholder.
+ *
+ * So the export appears only when it was asked for, and the stub keeps quiet.
+ * When something actually reads SITE_URL it will want the opposite — always
+ * exported, null when unset, declared in each frames.d.ts — because a named
+ * import of an export that is sometimes absent fails at link time. That is a
+ * change to make alongside the first consumer, not before one exists.
+ */
+function siteUrlSource(siteUrl) {
+  if (siteUrl === undefined || siteUrl === null) return "";
+
+  return `
+/**
+ * The base url this page is served from, recorded by \`--site-url\`.
+ *
+ * A page cannot work this out for itself. \`document.baseURI\` answers for a
+ * browser that has already fetched the page, which is exactly the visitor who
+ * does not need the answer, and a crawler building a link preview never runs
+ * the page at all.
+ *
+ * Ends in a slash, so \`new URL(path, SITE_URL)\` lands under the site rather
+ * than beside it.
+ *
+ * @type {string}
+ */
+export const SITE_URL = ${JSON.stringify(siteUrl)};
+`;
+}
+
+export function renderContract(sequences, publicDir, siteUrl) {
   const json = JSON.stringify(
     sequences.map((s) => ({
       id: s.id,
@@ -523,7 +592,7 @@ export function renderContract(sequences, publicDir) {
 
 export const LUMA_COLS = ${LUMA_COLS};
 export const LUMA_ROWS = ${LUMA_ROWS};
-
+${siteUrlSource(siteUrl)}
 /**
  * Ordered by preference. The page picks whichever sequence best matches the
  * viewport.
@@ -669,12 +738,31 @@ async function frames(positionals, flags) {
 
     const framesOut = join(projectDir, template.framesPath);
     mkdirSync(dirname(framesOut), { recursive: true });
-    writeFileSync(framesOut, renderContract(sequences, template.publicDir));
+    writeFileSync(framesOut, renderContract(sequences, template.publicDir, flags["site-url"]));
+
+    // Written whatever happens, because the file is useful on its own. What
+    // --site-url decides is whether the page can POINT at it, not whether it
+    // exists — a card nothing references costs one file, and a page that
+    // references a card nobody built costs a broken preview.
+    //
+    // Loud, not fatal, the same as the outline below. By this line the rename
+    // has happened and the contract is written: the frames encoded fine and the
+    // page will scrub. Failing the whole run over a link preview would send
+    // someone back through the entire encode to recover work that succeeded.
+    try {
+      await writeCard(sharp, sources[0], join(projectDir, template.publicDir, CARD_FILE));
+    } catch (err) {
+      warnings.push(`the link preview card could not be written — ${err.message}`);
+    }
 
     // A template with no render step cannot build its own story outline, and
     // that outline is what assistive technology reads and what the page becomes
     // under reduced motion. Regenerated from the story so the two cannot drift.
-    if (template.outlinePath) writeOutline(projectDir, template);
+    if (template.outlinePath) {
+      // No card path: lib/social-card.mjs names the card relative to the site
+      // url, which already carries the base path.
+      writeOutline(projectDir, template, { siteUrl: flags["site-url"] });
+    }
 
     report({ sequences, bytes, warnings });
     return 0;

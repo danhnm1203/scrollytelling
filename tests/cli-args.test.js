@@ -121,3 +121,96 @@ test("a filename holding shell metacharacters survives parsing untouched", () =>
 test("too many positionals is an error, not a silently dropped argument", () => {
   assert.throws(() => parseArgs(["frames", "a.mp4", "./site", "./other"]), UsageError);
 });
+
+/* ------------------------------------------------------------- --site-url -- */
+
+test("--site-url is absent unless asked for, so nothing changes by default", () => {
+  const { flags } = parseArgs(["frames", "clip.mp4", "./site"]);
+  assert.equal("site-url" in flags, false);
+});
+
+test("--site-url keeps a base path, because a project site is not just an origin", () => {
+  // Dropping the path would break the exact deploy target this exists for: a
+  // GitHub Pages project site is served from /<repo>/, not from the root.
+  const { flags } = parseArgs([
+    "frames", "clip.mp4", "./site", "--site-url", "https://danhnm1203.github.io/scrollytelling/",
+  ]);
+  assert.equal(flags["site-url"], "https://danhnm1203.github.io/scrollytelling/");
+});
+
+test("--site-url resolves the same whether or not a trailing slash was typed", () => {
+  // The real criterion is not the stored string, it is the url a page ends up
+  // requesting. Without the trailing slash, url resolution drops the last
+  // segment — `new URL("og.png", ".../scrollytelling")` is `.../og.png` — which
+  // is a wrong path rather than a doubled slash, and harder to spot.
+  const withSlash = parseArgs([
+    "frames", "c.mp4", "./s", "--site-url", "https://example.com/site/",
+  ]).flags["site-url"];
+  const without = parseArgs([
+    "frames", "c.mp4", "./s", "--site-url", "https://example.com/site",
+  ]).flags["site-url"];
+
+  assert.equal(withSlash, without);
+  assert.equal(new URL("og.png", withSlash).href, "https://example.com/site/og.png");
+  assert.equal(new URL("og.png", without).href, "https://example.com/site/og.png");
+});
+
+test("--site-url at an origin root still ends in a single slash", () => {
+  const { flags } = parseArgs(["frames", "c.mp4", "./s", "--site-url", "https://example.com"]);
+  assert.equal(flags["site-url"], "https://example.com/");
+  assert.equal(new URL("og.png", flags["site-url"]).href, "https://example.com/og.png");
+});
+
+test("--site-url accepts the inline form", () => {
+  const { flags } = parseArgs(["frames", "c.mp4", "./s", "--site-url=https://example.com/x/"]);
+  assert.equal(flags["site-url"], "https://example.com/x/");
+});
+
+test("--site-url rejects a relative url, and says what it got", () => {
+  assert.throws(() => parseArgs(["frames", "c.mp4", "./s", "--site-url", "/scrollytelling/"]),
+    (err) => {
+      assert.ok(err instanceof UsageError);
+      assert.match(err.message, /--site-url/);
+      assert.match(err.message, /\/scrollytelling\//);
+      return true;
+    });
+});
+
+test("--site-url rejects a scheme a browser will not fetch a card from", () => {
+  // A file: or data: base produces og:image values that every crawler drops,
+  // silently. Better to refuse than to emit a card nobody can read.
+  for (const bad of ["file:///tmp/site/", "ftp://example.com/", "javascript:alert(1)"]) {
+    assert.throws(() => parseArgs(["frames", "c.mp4", "./s", "--site-url", bad]),
+      (err) => {
+        assert.ok(err instanceof UsageError, `${bad} should be refused`);
+        assert.match(err.message, /http/);
+        return true;
+      });
+  }
+});
+
+test("--site-url with no value is an error, not an empty origin", () => {
+  assert.throws(() => parseArgs(["frames", "c.mp4", "./s", "--site-url"]), (err) => {
+    assert.ok(err instanceof UsageError);
+    assert.match(err.message, /needs a value/);
+    return true;
+  });
+});
+
+test("--site-url does not swallow the flag after it", () => {
+  assert.throws(() => parseArgs(["frames", "c.mp4", "./s", "--site-url", "--frames", "20"]),
+    UsageError);
+});
+
+test("--site-url rejects a query or fragment rather than storing one nothing sends", () => {
+  // Url resolution drops both, so keeping them would put a value in the page
+  // that no request ever carries.
+  for (const bad of ["https://example.com/site/?utm=x", "https://example.com/site/#top"]) {
+    assert.throws(() => parseArgs(["frames", "c.mp4", "./s", "--site-url", bad]),
+      (err) => {
+        assert.ok(err instanceof UsageError, `${bad} should be refused`);
+        assert.match(err.message, /--site-url/);
+        return true;
+      });
+  }
+});

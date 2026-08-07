@@ -27,7 +27,8 @@ import sharp from "sharp";
 
 import { pathToFileURL } from "node:url";
 
-import { framePathSource, renderContract, run } from "../scripts/frames.mjs";
+import { CARD_FILE, framePathSource, renderContract, run } from "../scripts/frames.mjs";
+import { run as scaffoldRun } from "../scripts/scaffold.mjs";
 import { TEMPLATES, templateNames } from "../lib/template-manifest.mjs";
 
 const temps = [];
@@ -857,5 +858,189 @@ describe("where the generated contract says frames live", () => {
       const body = (stub.match(/export function framePath\([^)]*\) \{\n([^\n]*)/) ?? [])[1];
       assert.equal(body, framePathSource(t.publicDir).body, `${name}'s stub has drifted`);
     }
+  });
+});
+
+describe("the card a link preview shows", () => {
+  // The one asset a crawler you do not control has to decode. That is why it is
+  // JPEG and not webp: the frames are webp because the page decodes them and the
+  // page is a browser, but a link unfurler is somebody else's code and webp
+  // support across them is unverified.
+
+  /** A real html project, scaffolded then built, because the page is the point. */
+  async function build(flags = {}) {
+    const project = join(tempDir(), "site");
+    const quiet = process.stdout.write.bind(process.stdout);
+    process.stdout.write = () => true;
+    try {
+      await scaffoldRun([project], { template: "html" });
+    } finally {
+      process.stdout.write = quiet;
+    }
+    const stills = await stillsDir(4, { width: 320, height: 180 });
+    const { code } = await runCapturing([stills, project], { frames: 4, ...flags });
+    assert.equal(code, 0, "the build should succeed");
+    return project;
+  }
+
+  it("writes a card beside the frames, at the size every unfurler crops to", async () => {
+    const project = await build();
+    const card = join(project, CARD_FILE);
+    assert.ok(existsSync(card), `expected a card at ${CARD_FILE}`);
+
+    const meta = await sharp(card).metadata();
+    assert.equal(meta.width, 1200);
+    assert.equal(meta.height, 630);
+    assert.equal(meta.format, "jpeg", "webp is not safe here — see this block's note");
+  });
+
+  it("is built even when nobody said where the site is", async () => {
+    // The file is useful on its own; what the site url decides is whether the
+    // page can POINT at it, not whether it exists.
+    const project = await build();
+    assert.ok(existsSync(join(project, CARD_FILE)));
+  });
+
+  it("fills the page's card tags with an absolute url", async () => {
+    const project = await build({ "site-url": "https://example.com/site/" });
+    const page = readFileSync(join(project, "index.html"), "utf8");
+    const contentOf = (tag) =>
+      (page.match(new RegExp(`<meta (?:property|name)="${tag}" content="([^"]*)"`)) ?? [])[1];
+
+    assert.equal(contentOf("og:image"), `https://example.com/site/${CARD_FILE}`);
+    assert.equal(contentOf("twitter:image"), `https://example.com/site/${CARD_FILE}`);
+    assert.equal(contentOf("og:url"), "https://example.com/site/");
+    assert.ok(contentOf("og:title").length > 0, "og:title should carry the story title");
+  });
+
+  it("leaves the page's image tags empty when nobody said where the site is", async () => {
+    const project = await build();
+    const page = readFileSync(join(project, "index.html"), "utf8");
+    assert.match(page, /<meta property="og:image" content="" \/>/);
+    assert.match(page, /<meta name="twitter:image" content="" \/>/);
+  });
+
+  it("does not fail the run when the card cannot be written", async () => {
+    // By the time the card is written the rename has happened and the contract
+    // is on disk: the frames encoded fine and the page will scrub. Failing here
+    // would send someone back through the whole encode to recover work that
+    // already succeeded. Loud, not fatal — the same rule the outline follows.
+    const project = join(tempDir(), "site");
+    const quiet = process.stdout.write.bind(process.stdout);
+    process.stdout.write = () => true;
+    try {
+      await scaffoldRun([project], { template: "html" });
+    } finally {
+      process.stdout.write = quiet;
+    }
+    // A directory where the file wants to be: sharp cannot write over it.
+    mkdirSync(join(project, CARD_FILE), { recursive: true });
+
+    const stills = await stillsDir(3, { width: 320, height: 180 });
+    const { code, stdout, stderr } = await runCapturing([stills, project], { frames: 3 });
+
+    assert.equal(code, 0, "the frames succeeded, so the run should succeed");
+    assert.ok(existsSync(join(project, "frames/landscape_0.webp")), "frames still written");
+    assert.match(`${stdout}${stderr}`, /card/i, "and it has to say so");
+  });
+
+  it("ships the template with empty tags, carrying none of this repo's demo values", async () => {
+    const stub = readFileSync(new URL("../templates/html/index.html", import.meta.url), "utf8");
+    for (const tag of ["og:title", "og:description", "og:url", "og:image",
+                       "twitter:title", "twitter:description", "twitter:image"]) {
+      assert.match(
+        stub,
+        new RegExp(`<meta (?:property|name)="${tag}" content="" />`),
+        `${tag} must ship empty`,
+      );
+    }
+    // og:type and twitter:card are constants describing the KIND of page, not
+    // copy about this one. Everything else must be empty until `frames` fills
+    // it, or a scaffolded project would ship telling the world about ORBIT.
+    assert.match(stub, /<meta property="og:type" content="website" \/>/);
+    assert.match(stub, /<meta name="twitter:card" content="summary_large_image" \/>/);
+    const valued = [...stub.matchAll(/<meta (?:property|name)="((?:og|twitter):[a-z]+)" content="([^"]+)"/g)]
+      .map(([, tag]) => tag)
+      .filter((tag) => tag !== "og:type" && tag !== "twitter:card");
+    assert.deepEqual(valued, [], "no card tag may ship carrying copy");
+  });
+});
+
+describe("where the generated contract says the site itself lives", () => {
+  // A page cannot work out its own absolute address at runtime — a zero-build
+  // template has no environment to read, and document.baseURI only answers for
+  // the page, not for a crawler that has never fetched it. So it is recorded
+  // when the frames are written, or it is not known at all.
+  //
+  // Asserted by running the emitted module, for the same reason as framePath
+  // above: what matters is the url something would end up requesting.
+
+  /** Import the generated contract and hand back what it exports. */
+  async function contractOf(siteUrl) {
+    const dir = tempDir();
+    const file = join(dir, `frames-${Math.random().toString(36).slice(2)}.js`);
+    writeFileSync(file, renderContract([], ".", siteUrl));
+    return import(pathToFileURL(file).href);
+  }
+
+  it("says nothing at all when nobody said where the site lives", async () => {
+    // Absent rather than `= null`, because the stub in templates/ is what the
+    // upgrade record hashes. See the byte-identity test below for what changing
+    // the stub would cost.
+    const mod = await contractOf(undefined);
+    assert.equal("SITE_URL" in mod, false);
+  });
+
+  it("records the base url it was given", async () => {
+    const { SITE_URL } = await contractOf("https://danhnm1203.github.io/scrollytelling/");
+    assert.equal(SITE_URL, "https://danhnm1203.github.io/scrollytelling/");
+  });
+
+  it("resolves to a url under the base, not beside it", async () => {
+    // The whole point of the trailing slash the parser normalises to. Beside it
+    // would be https://example.com/og.png — a live url serving the wrong thing,
+    // which is worse than a 404 because nothing reports it.
+    const { SITE_URL } = await contractOf("https://example.com/site/");
+    assert.equal(new URL("og.png", SITE_URL).href, "https://example.com/site/og.png");
+  });
+
+  it("writes the same bytes as the shipped stub when nobody said", () => {
+    // The real guard, and the reason the export is absent rather than null.
+    //
+    // components/frames.js is GENERATED, but it is also shipped as a stub, and
+    // the stub is what `scaffold --diff` hashes. The planner skips any file
+    // whose template hash still matches what the project recorded — so today a
+    // project that has run `frames` never sees its contract mentioned at all.
+    // Touch the stub and that stops being true: every existing project is told
+    // its contract "changed in the template AND was edited by you", and offered
+    // adoption as the remedy, which would replace real measured sequences with
+    // an empty placeholder.
+    //
+    // Asserting against the stub keeps the two facts tied together. If a future
+    // change adds an export here, this fails and points at the stub, rather
+    // than the damage showing up in someone else's project after an upgrade.
+    const generated = renderContract([], ".", undefined);
+    for (const name of templateNames()) {
+      const t = TEMPLATES[name];
+      const stub = readFileSync(new URL(`../templates/${t.dir}/${t.framesPath}`, import.meta.url), "utf8");
+      const exportsOf = (src) => (src.match(/^export (?:const|function) (\w+)/gm) ?? []).sort();
+      assert.deepEqual(
+        exportsOf(generated),
+        exportsOf(stub),
+        `${name}'s stub and the no-flag contract must export the same names`,
+      );
+    }
+  });
+
+  it("adds the export only when asked, and changes nothing else", () => {
+    const without = renderContract([], ".", undefined);
+    const with_ = renderContract([], ".", "https://example.com/");
+    assert.ok(!without.includes("SITE_URL"), "no mention of SITE_URL without the flag");
+    assert.ok(with_.includes("export const SITE_URL"), "the export appears with the flag");
+    assert.equal(
+      with_.replace(/\n\/\*\*(?:(?!\*\/)[\s\S])*?\*\/\nexport const SITE_URL = .*;\n/, ""),
+      without,
+      "with the block removed, the two must be byte-identical",
+    );
   });
 });

@@ -19,8 +19,9 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, describe, it } from "node:test";
+import { fileURLToPath } from "node:url";
 
-import { run } from "../scripts/scaffold.mjs";
+import { isTemplateFile, run } from "../scripts/scaffold.mjs";
 
 const temps = [];
 function tempDir() {
@@ -740,5 +741,77 @@ describe("scaffold", () => {
 
     assert.notEqual(code, 0);
     assert.match(stderr, /project/i);
+  });
+});
+
+describe("what the demo keeps to itself", () => {
+  // The demo's address is a build argument, and its copy is tools/demo-story.js.
+  // Neither belongs in what a stranger scaffolds: a project that shipped
+  // telling the world about this repository's demo would be a bug nobody would
+  // think to look for, because the page renders perfectly.
+
+  const templateFiles = () => {
+    const out = [];
+    const walk = (dir) => {
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        if (entry.name === "node_modules") continue;
+        const path = join(dir, entry.name);
+        if (entry.isDirectory()) walk(path);
+        else if (/\.(html|js|mjs|ts|tsx|vue|astro|json)$/.test(entry.name)) out.push(path);
+      }
+    };
+    walk(fileURLToPath(new URL("../templates", import.meta.url)));
+    return out;
+  };
+
+  it("keeps the demo's address out of every template", () => {
+    const leaked = templateFiles().filter((f) =>
+      readFileSync(f, "utf8").includes("danhnm1203.github.io"),
+    );
+    assert.deepEqual(leaked, [], "a scaffolded project must not point at this repo's demo");
+  });
+
+  it("keeps the demo's copy out of every template", () => {
+    // demo-story.js writes over the template's story during the sample build.
+    // If a phrase from it turned up in templates/, the copy had been pasted
+    // rather than passed.
+    const leaked = templateFiles().filter((f) =>
+      readFileSync(f, "utf8").includes("Amiana"),
+    );
+    assert.deepEqual(leaked, [], "the demo's copy must not be baked into a template");
+  });
+});
+
+describe("build artifacts that happen to be sitting in templates/", () => {
+  // Found while adding the social card: templates/next/tsconfig.tsbuildinfo is
+  // gitignored, but `files: ["templates"]` in package.json is an ALLOWLIST and
+  // takes precedence — `npm pack` shipped it. So a published install carried
+  // one machine's TypeScript build cache, and scaffold copied it into every
+  // generated project. A stale .tsbuildinfo makes tsc skip files it believes
+  // are unchanged, so a fresh project's type errors go unreported.
+  //
+  // Anything a framework writes while someone is working on a template can end
+  // up here. The list is what those four frameworks emit.
+
+  it("does not install a build cache into a generated project", async () => {
+    const dir = join(tempDir(), "site");
+    await runCapturing([dir, "--template", "next"]);
+    const stray = readdirSync(dir).filter((f) => f.endsWith(".tsbuildinfo"));
+    assert.deepEqual(stray, [], "a build cache must not reach a generated project");
+  });
+
+  it("ignores every framework's build output, not only the one that was seen", async () => {
+    // Asserted on the picker rather than through a scaffold, so it covers the
+    // directories too — creating a real .next/ here would only prove the case
+    // that was already known.
+    for (const name of ["tsconfig.tsbuildinfo", "x.tsbuildinfo"]) {
+      assert.equal(isTemplateFile(name), false, `${name} should be skipped`);
+    }
+    for (const name of [".next", ".nuxt", ".astro", ".output", "dist", "node_modules"]) {
+      assert.equal(isTemplateFile(name), false, `${name}/ should be skipped`);
+    }
+    for (const name of ["index.html", "app.vue", "layout.tsx", "frames.js", ".gitignore"]) {
+      assert.equal(isTemplateFile(name), true, `${name} belongs in a project`);
+    }
   });
 });

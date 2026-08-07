@@ -4,6 +4,8 @@
 
 **Turn a video you already have into a complete hero page, in one command.**
 
+[<img src="docs/media/scroll.gif" alt="One command scaffolds a project and encodes a clip, printing how bright the footage is by region and scroll position. The page it produces is then scrolled: the clip advances frame by frame while copy fades in over it, and the page continues below the scroll." width="800">](https://danhnm1203.github.io/scrollytelling/)
+
 The clip advances frame by frame as the visitor scrolls, with your copy fading in
 over it. Every frame is measured as it is encoded, so the text stays readable and
 the page has no visible seams — on your footage, not just on a showreel.

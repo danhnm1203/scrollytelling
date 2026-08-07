@@ -19,6 +19,8 @@ frames options
   --quality <n>     webp quality, 1-100                   (default 82)
   --focus <0-1>     where the portrait crop sits horizontally  (default 0.5)
   --skip-portrait   build only the landscape sequence
+  --site-url <url>  where the finished page will be served from, so it can
+                    build absolute urls  (e.g. https://you.github.io/repo/)
   --template <name> override the template recorded by scaffold (rarely needed)
 
 scaffold options

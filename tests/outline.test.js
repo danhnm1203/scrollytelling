@@ -158,3 +158,199 @@ describe("the page's own title", () => {
     assert.match(out, /<title>ORBIT — every part accounted for<\/title>/);
   });
 });
+
+describe("the card a link preview shows", () => {
+  // Paste a page's address into Slack, X or Discord and the crawler never runs
+  // the page: it reads the served markup and nothing else. So whatever the head
+  // says at build time is the whole preview, and a page whose head says nothing
+  // renders as a bare link no matter how good the page is.
+  //
+  // The tags ship EMPTY in the template and are filled here, for the same
+  // reason <title> is: the command must not invent markup nobody asked for, and
+  // a scaffolded project must not carry this repository's own demo values.
+
+  const CARD_PAGE = [
+    "<!doctype html>",
+    "<html>",
+    "  <head>",
+    "    <title>ORBIT — every part accounted for</title>",
+    '    <meta name="description" content="A scroll-driven look at Orbit." />',
+    '    <meta property="og:title" content="" />',
+    '    <meta property="og:description" content="" />',
+    '    <meta property="og:url" content="" />',
+    '    <meta property="og:image" content="" />',
+    '    <meta name="twitter:card" content="summary_large_image" />',
+    '    <meta name="twitter:title" content="" />',
+    '    <meta name="twitter:description" content="" />',
+    '    <meta name="twitter:image" content="" />',
+    "  </head>",
+    "  <body>",
+    `    ${OPEN_MARKER}`,
+    `    ${CLOSE_MARKER}`,
+    "  </body>",
+    "</html>",
+  ].join("\n");
+
+  const STORY = {
+    brand: "ACME",
+    title: "Acme — the real title",
+    description: "What this page is actually about.",
+    sections: [{ heading: "One", body: "First." }],
+  };
+
+  const contentOf = (html, tag) =>
+    (html.match(new RegExp(`<meta (?:property|name)="${tag}" content="([^"]*)"`)) ?? [])[1];
+
+  it("takes its words from the story, like the title does", () => {
+    const out = replaceOutline(CARD_PAGE, STORY, { siteUrl: "https://example.com/site/" });
+    assert.equal(contentOf(out, "og:title"), "Acme — the real title");
+    assert.equal(contentOf(out, "og:description"), "What this page is actually about.");
+    assert.equal(contentOf(out, "twitter:title"), "Acme — the real title");
+    assert.equal(contentOf(out, "twitter:description"), "What this page is actually about.");
+  });
+
+  it("points at an absolute image, because a crawler has no page to resolve against", () => {
+    // A relative og:image is the failure this exists to prevent: it looks right
+    // in the markup and resolves to nothing on someone else's server.
+    const out = replaceOutline(CARD_PAGE, STORY, {
+      siteUrl: "https://danhnm1203.github.io/scrollytelling/",
+      cardPath: "og.jpg",
+    });
+    assert.equal(
+      contentOf(out, "og:image"),
+      "https://danhnm1203.github.io/scrollytelling/og.jpg",
+    );
+    assert.equal(
+      contentOf(out, "twitter:image"),
+      "https://danhnm1203.github.io/scrollytelling/og.jpg",
+    );
+    assert.equal(contentOf(out, "og:url"), "https://danhnm1203.github.io/scrollytelling/");
+  });
+
+  it("lands the image under the site, not beside it", () => {
+    // The trailing-slash rule from #75, asserted where it actually bites.
+    const out = replaceOutline(CARD_PAGE, STORY, {
+      siteUrl: "https://example.com/deep/path/",
+      cardPath: "og.jpg",
+    });
+    assert.equal(contentOf(out, "og:image"), "https://example.com/deep/path/og.jpg");
+  });
+
+  it("leaves the image empty rather than relative when nobody said where the site is", () => {
+    // Degrade to no card, never to a wrong one. A relative og:image resolves
+    // against the crawler's own base and silently fetches something else.
+    const out = replaceOutline(CARD_PAGE, STORY, { cardPath: "og.jpg" });
+    assert.equal(contentOf(out, "og:image"), "");
+    assert.equal(contentOf(out, "twitter:image"), "");
+    assert.equal(contentOf(out, "og:url"), "");
+    // The words cost nothing and still improve the preview.
+    assert.equal(contentOf(out, "og:title"), "Acme — the real title");
+  });
+
+  it("does not put tags back that the author deleted", () => {
+    // Same rule as <title>: a page missing a tag is missing it on purpose.
+    const stripped = CARD_PAGE.replace(/^.*og:image.*$\n/m, "").replace(/^.*twitter:image.*$\n/m, "");
+    const out = replaceOutline(stripped, STORY, {
+      siteUrl: "https://example.com/",
+      cardPath: "og.jpg",
+    });
+    assert.ok(!out.includes("og:image"), "og:image must stay deleted");
+    assert.ok(!out.includes("twitter:image"), "twitter:image must stay deleted");
+    assert.equal(contentOf(out, "og:title"), "Acme — the real title", "the rest still fills");
+  });
+
+  it("escapes what it writes, so a quote in the copy cannot end the attribute", () => {
+    const out = replaceOutline(CARD_PAGE, { ...STORY, title: 'A "quoted" name & co' }, {
+      siteUrl: "https://example.com/",
+    });
+    assert.equal(contentOf(out, "og:title"), "A &quot;quoted&quot; name &amp; co");
+  });
+
+  it("leaves a page with no card tags exactly as it found it", () => {
+    const plain = [
+      "<!doctype html>",
+      "<html><head><title>t</title></head>",
+      `<body>${OPEN_MARKER}${CLOSE_MARKER}</body></html>`,
+    ].join("\n");
+    const out = replaceOutline(plain, STORY, { siteUrl: "https://example.com/", cardPath: "og.jpg" });
+    assert.ok(!out.includes("og:"), "no card markup should appear");
+  });
+});
+
+describe("filling a tag the author reformatted", () => {
+  // A head is markup somebody owns, and formatters move attributes around.
+  // Matching `property=` before `content=` silently stops rewriting the moment
+  // they swap, and a tag that is never updated again looks exactly like one the
+  // author deleted on purpose — which is the one thing this file must not
+  // confuse, since it treats deletion as an instruction.
+
+  const STORY = { title: "T", description: "D" };
+  const wrap = (head) =>
+    ["<html><head>", head, "</head><body>", OPEN_MARKER, CLOSE_MARKER, "</body></html>"].join("\n");
+
+  it("fills a tag whose attributes are the other way round", () => {
+    const out = replaceOutline(wrap('<meta content="" property="og:title" />'), STORY, {
+      siteUrl: "https://e.com/",
+    });
+    assert.match(out, /content="T"/);
+  });
+
+  it("fills a tag broken across lines by a formatter", () => {
+    const out = replaceOutline(
+      wrap('<meta\n      property="og:description"\n      content=""\n    />'),
+      STORY,
+      { siteUrl: "https://e.com/" },
+    );
+    assert.match(out, /content="D"/);
+  });
+
+  it("fills a tag carrying extra attributes", () => {
+    const out = replaceOutline(
+      wrap('<meta data-keep="1" property="og:title" content="" lang="en" />'),
+      STORY,
+      { siteUrl: "https://e.com/" },
+    );
+    assert.match(out, /data-keep="1"/, "other attributes survive");
+    assert.match(out, /content="T"/);
+  });
+
+  it("writes the exact markup, not merely something a regex can find", () => {
+    // The unit tests above and the end-to-end ones both read tags back with a
+    // regex shaped like the production one, so a bug in that shape would pass
+    // in lockstep. This asserts the literal string instead.
+    const out = replaceOutline(wrap('<meta property="og:url" content="" />'), STORY, {
+      siteUrl: "https://example.com/site/",
+    });
+    assert.ok(
+      out.includes('<meta property="og:url" content="https://example.com/site/" />'),
+      "the emitted tag should be exactly this",
+    );
+  });
+});
+
+describe("copy that looks like a replacement pattern", () => {
+  it("writes $& out literally instead of substituting the match", () => {
+    // String replacements interpret $&, $1 and friends. The value here is the
+    // author's copy, so a title containing $& would be replaced by the tag it
+    // was being written into. Function replacements, both hops.
+    const page = [
+      "<html><head>",
+      '<meta property="og:title" content="" />',
+      "<title>x</title>",
+      "</head><body>",
+      OPEN_MARKER,
+      CLOSE_MARKER,
+      "</body></html>",
+    ].join("\n");
+    const out = replaceOutline(page, { title: "Cash $& carry $1" }, { siteUrl: "https://e.com/" });
+    assert.ok(
+      out.includes('<meta property="og:title" content="Cash $&amp; carry $1" />'),
+      `got: ${/<meta property="og:title"[^>]*>/.exec(out)?.[0]}`,
+    );
+    assert.equal(
+      out.split('property="og:title"').length - 1,
+      1,
+      "the tag should appear once, not have itself substituted into its own value",
+    );
+  });
+});

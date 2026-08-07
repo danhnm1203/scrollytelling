@@ -19,7 +19,7 @@
  * and why each one is on the list.
  */
 
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { mkdtemp, mkdir, readdir, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, relative, extname } from "node:path";
@@ -29,11 +29,13 @@ import { promisify } from "node:util";
 import ffmpegPath from "ffmpeg-static";
 import sharp from "sharp";
 
-import { BUILD_PLANS, missingArtifacts } from "./template-build.mjs";
+import { ARTIFACTS, GATE_SITE_URL, BUILD_PLANS, missingArtifacts } from "./template-build.mjs";
 
 const run = promisify(execFile);
 
 const CLI = fileURLToPath(new URL("../bin/cli.mjs", import.meta.url));
+
+
 const REPO = fileURLToPath(new URL("..", import.meta.url));
 
 const FRAME_COUNT = 12;
@@ -84,6 +86,52 @@ async function makeClip(dir) {
 }
 
 /** Every file under `dir`, as {path, text}. Binary files carry an empty text. */
+
+/**
+ * The page a running server returns, as one more emitted file.
+ *
+ * For a template that renders per request there is no built document to read:
+ * the head is composed when somebody asks for it. Checking the bundle instead
+ * would mean checking for the ingredients rather than the page, which is how a
+ * gate ends up passing a build whose head is empty.
+ *
+ * The port is high and fixed rather than random, so a failure names a number
+ * somebody can go and look at.
+ */
+async function fetchServed(projectDir, serve, log) {
+  const port = 4188;
+  const [command, ...args] = serve.argv;
+  const child = spawn(command, args, {
+    cwd: projectDir,
+    env: { ...process.env, PORT: String(port), NITRO_PORT: String(port), HOST: "127.0.0.1" },
+    stdio: "ignore",
+  });
+
+  try {
+    const url = `http://127.0.0.1:${port}${serve.path}`;
+    const deadline = Date.now() + 30_000;
+    for (;;) {
+      if (child.exitCode !== null) throw new Error(`the server exited ${child.exitCode} before answering`);
+      try {
+        const response = await fetch(url);
+        const text = await response.text();
+        if (response.ok) {
+          log(`asked the running server for ${serve.path} (${text.length} bytes)`);
+          // Named so the existing path predicates treat it as a served
+          // document, which is exactly what it is.
+          return { path: "served/index.html", text };
+        }
+        throw new Error(`the server answered ${response.status} for ${serve.path}`);
+      } catch (error) {
+        if (Date.now() > deadline) throw error;
+        await new Promise((resolve) => setTimeout(resolve, 250));
+      }
+    }
+  } finally {
+    child.kill();
+  }
+}
+
 async function collect(dir, root = dir, out = []) {
   let entries;
   try {
@@ -135,7 +183,20 @@ async function main() {
     log(`[${template}] measuring and encoding frames`);
     await run(
       process.execPath,
-      [CLI, "frames", clip, project, "--frames", String(SAMPLED), "--skip-portrait"],
+      // A site url, so the build has a card to emit. Without one the card tags
+      // are empty by design, and a gate that only ever sees the empty case
+      // cannot tell a template that fills them from one that does not.
+      [
+        CLI,
+        "frames",
+        clip,
+        project,
+        "--frames",
+        String(SAMPLED),
+        "--skip-portrait",
+        "--site-url",
+        GATE_SITE_URL,
+      ],
       { cwd: REPO },
     );
 
@@ -163,7 +224,14 @@ async function main() {
     for (const sub of searched) {
       files.push(...(await collect(join(project, sub))));
     }
-    log(`[${template}] checking ${files.length} emitted files in ${searched.join(", ")}`);
+    if (plan.serve) {
+      files.push(await fetchServed(project, plan.serve, (m) => log(`[${template}] ${m}`)));
+    }
+
+    log(
+      `[${template}] checking ${files.length} emitted files in ${searched.join(", ")}` +
+        (plan.serve ? " and the served page" : ""),
+    );
 
     const missing = missingArtifacts(files);
     if (missing.length > 0) {
@@ -174,7 +242,9 @@ async function main() {
     }
 
     const how = plan.build ? "built output" : "scaffolded tree (this template has no build)";
-    log(`[${template}] OK — worker, stylesheet, reduced-motion rules and frames all in the ${how}`);
+    // Named from ARTIFACTS rather than written out, so adding one cannot leave
+    // this line quietly claiming less than the gate checked.
+    log(`[${template}] OK — ${ARTIFACTS.map((a) => a.name).join(", ")} all in the ${how}`);
   } finally {
     // Best effort: a gate that fails because it could not delete a temp
     // directory reports the wrong problem. Said out loud all the same — a

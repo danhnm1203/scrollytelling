@@ -55,6 +55,7 @@ const NOTES = {
  * @property {number} frames        how many frames in the sequence
  * @property {string[] | null} install argv to install dependencies, or null
  * @property {string[] | null} dev     argv to start it, or null
+ * @property {string | null} siteUrl  where the built page will be served from, or null
  * @property {string} note          anything the runner should say afterwards
  */
 
@@ -81,7 +82,11 @@ export function planSample(argv) {
     // Taking the last of a repeated flag would build something other than what
     // was asked for and say nothing about it.
     if (given.has(flag)) throw new Error(`${flag} was given twice`);
-    if (!["--template", "--out", "--clip", "--frames", "--story", "--sections"].includes(flag)) {
+    if (
+      !["--template", "--out", "--clip", "--frames", "--story", "--sections", "--site-url"].includes(
+        flag,
+      )
+    ) {
       throw new Error(`unknown option "${flag}"`);
     }
 
@@ -113,6 +118,11 @@ export function planSample(argv) {
     clip: given.get("--clip") ?? null,
     story: given.get("--story") ?? null,
     sections: given.get("--sections") ?? null,
+    // Passed through unvalidated on purpose: `frames` already refuses a
+    // relative url, a scheme no crawler will fetch, and a base carrying a
+    // query, and it normalises the trailing slash. A second validator here
+    // would be a second thing to keep in step.
+    siteUrl: given.get("--site-url") ?? null,
     frames: given.has("--frames") ? readCount(given.get("--frames")) : DEFAULT_FRAMES,
     install: build.install,
     dev: DEV[template],
