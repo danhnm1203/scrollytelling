@@ -10,10 +10,21 @@ node_modules/
 # Scratch output from `frames --preview`
 .preview/
 
-# A generated project kept around to try changes against. It is a whole
-# Next.js install with its own git history and a full frame sequence, so it
-# belongs beside this repo rather than inside it.
+# A generated project kept around by hand to try changes against, along with
+# whatever footage was fed to it. Not the one `npm run sample` builds — that is
+# .sample-<template>/ below. It is a whole Next.js install with its own git
+# history and a full frame sequence, so it belongs beside this repo rather than
+# inside it.
 sample/
+
+# What `npm run sample` builds — one directory per template, .sample-next and
+# friends. Each is a whole generated project, its node_modules and a full frame
+# sequence, reproducible in one command, so none of it is worth carrying in git.
+#
+# The glob is load-bearing rather than lazy: tools/sample-plan.mjs will only
+# accept a `--out` that starts with `.sample`, so everything it can possibly
+# write is covered by this one rule. A test asserts the two agree.
+.sample*/
 
 # NOTE: a generated project commits its own public/frames/ — deploys need the
 # webp sequence in git. Nothing here may ignore it. See README, "Frames in git".

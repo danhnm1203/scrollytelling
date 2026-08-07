@@ -1,0 +1,85 @@
+name: Show your page
+description: You built something with this tool — show it.
+title: "[Page] "
+labels: ["showcase"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for building something. Seeing real pages, made from real
+        footage, is how this tool finds out what it gets wrong.
+
+  - type: input
+    id: page-url
+    attributes:
+      label: Your page
+      description: A link anyone can open.
+      placeholder: https://…
+    validations:
+      required: true
+
+  - type: dropdown
+    id: footage
+    attributes:
+      label: What went in
+      description: Footage shot on a phone is the interesting case, not the embarrassing one.
+      options:
+        - A clip I shot on my phone
+        - Stock or cinematic footage
+        - A folder of images
+        - A screen recording
+        - Something else
+    validations:
+      required: true
+
+  - type: dropdown
+    id: template
+    attributes:
+      label: Which stack
+      options:
+        - Next
+        - Nuxt
+        - Astro
+        - Plain HTML
+    validations:
+      required: false
+
+  - type: dropdown
+    id: found-where
+    attributes:
+      label: Where did you find this project?
+      description: >
+        The only way to tell which channels reach people who actually build
+        something. npm downloads carry no referrer, so without this answer there
+        is nothing.
+      options:
+        - Hacker News
+        - Reddit
+        - X / Twitter
+        - A marketplace or skill directory
+        - A search engine
+        - Someone told me
+        - Somewhere else
+    validations:
+      required: true
+
+  - type: input
+    id: found-where-detail
+    attributes:
+      label: Anywhere more specific?
+      description: The thread, the post, the person — if you remember.
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: gallery-consent
+    attributes:
+      label: The README gallery
+      description: >
+        Entirely optional, and refusing changes nothing about this issue. If you
+        say yes, the gallery credits you as the person who built it, and the page
+        is removed within 24 hours of you asking — just reply here or open an
+        issue.
+      options:
+        - label: You may include this page in the README gallery.
+          required: false

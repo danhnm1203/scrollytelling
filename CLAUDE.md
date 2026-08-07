@@ -1,6 +1,7 @@
 # scrollytelling
 
-An npm CLI + skill that turns a video into a scroll-scrubbed Next.js landing page.
+An npm CLI + skill that turns a video into a scroll-scrubbed hero page — Next, Nuxt,
+Astro or plain HTML.
 
 - **Design (source of truth):** [docs/superpowers/specs/2026-08-04-scrollytelling-design.md](docs/superpowers/specs/2026-08-04-scrollytelling-design.md)
 - **Task order:** the [CEO review](docs/reviews/2026-08-04-ceo-review-scrollytelling.md) (T1–T23)
@@ -26,6 +27,13 @@ tests/               node:test, no build step
 ci/                  the per-template build gate — installs, bundles, and checks
                      the emitted files. Needs a network, so it runs in CI, not
                      in `npm test`. Not in package.json `files`.
+tools/               `npm run sample` — scaffolds a real project into
+                     .sample-<template>/ and starts it, so a change can be
+                     looked at rather than only tested. Split pure/impure the
+                     way ci/ is; its output is gitignored. Also holds the two
+                     inputs of the published demo page (demo-story.js and
+                     demo-clip.mp4), which ARE committed. Not in package.json
+                     `files`, so none of it ships.
 ```
 
 ## Invariants

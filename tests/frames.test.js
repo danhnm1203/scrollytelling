@@ -25,7 +25,10 @@ import { after, before, describe, it } from "node:test";
 
 import sharp from "sharp";
 
-import { run } from "../scripts/frames.mjs";
+import { pathToFileURL } from "node:url";
+
+import { framePathSource, renderContract, run } from "../scripts/frames.mjs";
+import { TEMPLATES, templateNames } from "../lib/template-manifest.mjs";
 
 const temps = [];
 function tempDir() {
@@ -780,5 +783,71 @@ describe("frames — which template a project uses", () => {
       !/scrollytelling-version/.test(stderr),
       `--check must not refuse over a missing record; stderr was ${stderr}`,
     );
+  });
+});
+
+describe("where the generated contract says frames live", () => {
+  // A generated page is often deployed under a subdirectory — a GitHub Pages
+  // project site is at /<repo>/, not at /. The path the runtime asks for has to
+  // survive that, and the failure when it does not is every frame 404ing while
+  // the page itself loads fine.
+  //
+  // Two shapes, because the templates differ in where the frames actually sit:
+  // a framework's public/ is served at the site root, while the html template
+  // puts frames beside index.html, wherever that has been dropped.
+  //
+  // Asserted by running the emitted module rather than by matching its text, so
+  // that what is checked is the url a browser would request.
+
+  /** Import the generated contract and call its framePath, under a given page url. */
+  async function framePathOf(publicDir, pageUrl) {
+    const dir = tempDir();
+    const file = join(dir, "frames.js");
+    writeFileSync(file, renderContract([], publicDir));
+    globalThis.document = { baseURI: pageUrl };
+    try {
+      const { framePath } = await import(pathToFileURL(file).href);
+      return framePath("landscape", 3);
+    } finally {
+      delete globalThis.document;
+    }
+  }
+
+  it("asks the site root when the frames are served from there", async () => {
+    // public/frames/ -> /frames/. A page-relative path would break the moment
+    // the page itself is not at the root of its own directory.
+    const url = await framePathOf("public", "https://example.com/anywhere/");
+    assert.equal(url, "/frames/landscape_3.webp");
+  });
+
+  it("resolves against the page when the frames sit beside it", async () => {
+    const url = await framePathOf(".", "https://danhnm1203.github.io/scrollytelling/");
+    assert.equal(url, "https://danhnm1203.github.io/scrollytelling/frames/landscape_3.webp");
+  });
+
+  it("still resolves when that page is at the site root", async () => {
+    const url = await framePathOf(".", "https://example.com/");
+    assert.equal(url, "https://example.com/frames/landscape_3.webp");
+  });
+
+  it("hands the worker something absolute", async () => {
+    // The trap this exists to avoid: the engine passes these urls to a worker,
+    // and a worker resolves a relative url against its own script in lib/
+    // rather than against the page. Only an absolute url reads the same on
+    // both threads.
+    const url = await framePathOf(".", "https://example.com/base/");
+    assert.equal(new URL(url, "https://example.com/base/lib/").href, url);
+  });
+
+  it("tells each template's own stub the same story", async () => {
+    // The stub shipped in templates/ is what a project has before `frames` has
+    // ever run. If it disagrees with the generator, the page works until the
+    // first render and then changes behaviour — or the reverse, which is worse.
+    for (const name of templateNames()) {
+      const t = TEMPLATES[name];
+      const stub = readFileSync(new URL(`../templates/${t.dir}/${t.framesPath}`, import.meta.url), "utf8");
+      const body = (stub.match(/export function framePath\([^)]*\) \{\n([^\n]*)/) ?? [])[1];
+      assert.equal(body, framePathSource(t.publicDir).body, `${name}'s stub has drifted`);
+    }
   });
 });

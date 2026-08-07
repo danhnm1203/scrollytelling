@@ -2,17 +2,22 @@
 
 # scrollytelling
 
-**Turn a video into a scroll-scrubbed landing page.**
+**Turn a video you already have into a complete hero page, in one command.**
 
-The clip advances frame by frame as the visitor scrolls, with copy fading in over
-it. Every frame is measured while it is encoded, so the page has no visible seams
-on any footage.
+The clip advances frame by frame as the visitor scrolls, with your copy fading in
+over it. Every frame is measured as it is encoded, so the text stays readable and
+the page has no visible seams — on your footage, not just on a showreel.
+
+**Next · Nuxt · Astro · plain HTML.** No accounts, no API keys, no runtime
+dependency beyond the framework you already chose.
+
+```bash
+npx @danhnm1203/scrollytelling scaffold ./my-site
+```
 
 [![test](https://github.com/danhnm1203/scrollytelling/actions/workflows/test.yml/badge.svg)](https://github.com/danhnm1203/scrollytelling/actions/workflows/test.yml)
 [![node](https://img.shields.io/badge/node-%E2%89%A520-3c873a)](https://nodejs.org)
 [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
-
-No accounts, no API keys, nothing to install system-wide.
 
 </div>
 
@@ -26,12 +31,15 @@ No accounts, no API keys, nothing to install system-wide.
 - [Quickstart with the CLI](#quickstart-with-the-cli)
 - [Why it looks right](#why-it-looks-right)
 - [Reduced motion](#reduced-motion)
-- [CLI reference](#cli-reference)
 - [What you get](#what-you-get)
-- [Frames are committed to git](#frames-are-committed-to-git)
-- [Development](#development)
-- [Contributing](#contributing)
 - [License](#license)
+
+Longer reference material lives beside this file:
+[CLI reference](docs/en/cli-reference.md) ·
+[Templates](docs/en/templates.md) ·
+[Why it looks right, in full](docs/en/why-it-looks-right.md) ·
+[Frames are committed to git](docs/en/frames-in-git.md) ·
+[Development and contributing](docs/en/contributing.md)
 
 ## Requirements
 
@@ -40,11 +48,10 @@ package and bring their own binaries.
 
 ## Installation
 
-```bash
-# Run it without installing — first run takes a minute, then it is cached
-npx @danhnm1203/scrollytelling <command>
+The command at the top of this file runs without installing anything — the first
+run takes a minute, then it is cached. If you will use it more than once:
 
-# Or install it, if you will use it more than once
+```bash
 npm i -g @danhnm1203/scrollytelling
 ```
 
@@ -105,7 +112,7 @@ need judgement rather than a flag:
   confirms the canvas really changes when scrolling back up.
 
 It will tell you what it chose and why. The project it leaves behind is a normal
-Next.js project — see [What you get](#what-you-get).
+project in whichever stack you asked for — see [What you get](#what-you-get).
 
 ## Quickstart with the CLI
 
@@ -134,14 +141,14 @@ cd my-site
 npm install
 ```
 
-You now have a normal Next.js project. `scaffold` never overwrites a file you
+You now have a normal Next.js project — or another stack, see below. `scaffold`
+never overwrites a file you
 have edited, so it is safe to re-run later — see
 [Keeping up with template fixes](#keeping-up-with-template-fixes).
 
 #### Other templates
 
-Next is the default. There are three others, and `--template` with no name
-lists them:
+Next is the default. Three others ship, and all four run the same engine:
 
 ```bash
 scrollytelling scaffold ./my-site --template nuxt
@@ -149,26 +156,8 @@ scrollytelling scaffold ./my-site --template astro
 scrollytelling scaffold ./my-site --template html
 ```
 
-| Template | What you get |
-| --- | --- |
-| `next` | Next.js App Router with Tailwind. The default. |
-| `nuxt` | Nuxt 4 with Vue single-file components. |
-| `astro` | Astro. Ships no framework JavaScript, only the engine. |
-| `html` | Plain HTML and JavaScript. No build step, no dependencies, nothing to install. |
-
-All four run the **same engine**, copied into `lib/` at scaffold time — so a
-fix to the scrubbing is one change, not four. What differs is the fifty-odd
-lines that hand it a container, and where each framework expects files to live.
-
-Two things worth knowing about `html`: there is no `npm install` and no build,
-but the page does need a real HTTP server. Module scripts and web workers are
-same-origin only, so opening `index.html` from the filesystem will not work. And
-its story outline is regenerated from `components/story.js` by `frames` — edit
-the story, not the markup.
-
-The project remembers which template it came from, so later `frames` and
-`--diff` runs need no flag. Scaffolding a different template over an existing
-project is refused rather than leaving a tree that is neither.
+What each one gives you, and the two things worth knowing about `html`, are in
+[Templates](docs/en/templates.md).
 
 ### 3. Turn the clip into a measured frame sequence
 
@@ -264,23 +253,11 @@ changing exposure.
 text at a fixed opacity stops being readable the moment a frame brightens under
 it. Over dark footage the backdrop is nearly invisible and the image stays clean.
 
-It also builds **two sequences**, landscape and a portrait crop, and the page
-picks whichever suits the screen. A 16:9 frame cannot fill a 9:19.5 phone without
-cropping most of its width, so without this a phone shows a strip surrounded by
-background.
+It also builds **two sequences**, landscape and a portrait crop, and eases toward
+the scroll position rather than snapping to it — which is the difference between
+motion and a slideshow.
 
-**The sequence eases toward the scroll position rather than snapping to it.**
-Locking the drawn frame 1:1 to scroll is the obvious design and it is what makes
-a sequence look mechanical: at 50 frames over 500vh a single frame covers about
-10vh, so one trackpad flick crosses several frames between two paints and the
-jump is visible. The page spends about a third of a second catching up instead,
-which spreads that jump over enough frames to read as motion.
-
-This is not smooth scrolling. The scroll position stays exactly the browser's —
-no wheel events are intercepted, no scrolling is virtualised, and anchor links,
-scrollbars and Find-in-page all behave normally. Only what is drawn is eased.
-The knob is `SCRUB_SECONDS` in `components/ScrollSequence.tsx`; set it to `0`
-for a hard 1:1 lock.
+[The whole of it, and why each choice is the way it is →](docs/en/why-it-looks-right.md)
 
 ## Reduced motion
 
@@ -308,27 +285,6 @@ scrollytelling frames --preview <video>
 scrollytelling frames --check <project_dir>
 ```
 
-### `frames --preview`
-
-```bash
-scrollytelling frames --preview <video>
-```
-
-Samples up to five evenly spaced frames from the input and writes resized PNG
-previews to a temporary directory. It prints the directory path so you can
-inspect the frames before creating a project. It does not modify or write
-anything inside a project directory.
-
-### `frames --check`
-
-```bash
-scrollytelling frames --check <project_dir>
-```
-
-Reads the generated frame contract and story file from an existing project and
-reports readability issues. It checks generated output rather than reprocessing
-the source footage, so you can run it repeatedly without regenerating frames.
-
 ### `frames` options
 
 | Option | Default | Description |
@@ -350,10 +306,16 @@ Input can be a video or a directory of ordered stills.
 
 ## What you get
 
-A normal Next.js 16 project depending on `next`, `react` and `react-dom` and
-nothing else. The video and image tooling stays in this package, so cloning,
-building and deploying your page never installs it. The trade-off is that
-installing *this* package fetches an ffmpeg binary (~80MB) once.
+A normal project in whichever stack you asked for, depending on that stack and
+nothing else — the `html` template depends on nothing at all. The video and image
+tooling stays in this package, so cloning, building and deploying your page never
+installs it. The trade-off is that installing *this* package fetches an ffmpeg
+binary (~80MB) once.
+
+Laid out below is the default `next` project, which depends on `next`, `react`
+and `react-dom`. The other three differ in the framework files around the edge;
+`lib/` and `public/frames/` are the same in all four — see
+[Templates](docs/en/templates.md).
 
 ```
 my-site/
@@ -400,47 +362,29 @@ Commit `.scrollytelling-version` along with the rest of the project. It is the
 only record of which template your project came from; without it `--diff` has no
 baseline to compare against and can only tell you to re-scaffold.
 
-## Frames are committed to git
+`public/frames/` is committed rather than gitignored, which is unusual enough to
+be worth a page of its own: [Frames are committed to git](docs/en/frames-in-git.md).
 
-`public/frames/` is deliberately **not** gitignored: a deploy builds from a fresh
-clone, and without the frames there is nothing to show.
+## Gallery
 
-The cost is that each `frames` run replaces the whole directory, so a project
-that iterates on footage accumulates every previous sequence in its history. If
-that gets heavy, squash before publishing:
+Pages built with this tool.
 
-```bash
-git reset --soft <commit-before-the-frame-churn> && git commit -m "frames: final sequence"
-```
+<!-- Entries land here from the "Show your page" form. Nothing goes in without
+     the submitter having ticked the gallery checkbox on that form. -->
 
-## Development
+*Nothing here yet — yours could be first.*
 
-```bash
-npm install
-npm test          # node:test, no build step
-```
+**[Show the page you built →](https://github.com/danhnm1203/scrollytelling/issues/new?template=show-your-page.yml)**
 
-`lib/scroll-math.mjs` is plain JavaScript rather than TypeScript so `node:test`
-can import it with no compile step. It is copied into generated projects at
-scaffold time, so there is only one copy of it in this repository and no way for
-the tested version to drift from the shipped one.
+Every entry says who built it, and pages submitted by other people are theirs:
+listed only when the form's gallery checkbox was ticked, credited to whoever made
+them, and **removed within 24 hours of the owner asking** — reply on your issue,
+or open a new one.
 
-`sharp` and `ffmpeg-static` are pinned to exact versions: tests assert measured
-pixel values, and resampling and encoding behaviour shifts on a minor bump.
-Upgrading is deliberate work that includes refreshing the expected values.
+## Working on this repository
 
-## Contributing
-
-Issues and pull requests are welcome. Before opening a PR:
-
-1. `npm test` passes on Node 20 and 22 — CI runs both.
-2. Changes to `lib/scroll-math.mjs` keep its copy in `templates/` byte-identical;
-   a parity test enforces this.
-3. Deliberately deferred work is listed in [TODOS.md](TODOS.md) — check there
-   before proposing something large.
-
-The design document is
-[docs/superpowers/specs/2026-08-04-scrollytelling-design.md](docs/superpowers/specs/2026-08-04-scrollytelling-design.md).
+Tests, the invariants they protect, and what to check before opening a PR:
+[Development and contributing](docs/en/contributing.md).
 
 ## License
 
