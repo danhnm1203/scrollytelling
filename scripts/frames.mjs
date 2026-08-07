@@ -499,7 +499,44 @@ export function framePathSource(publicDir) {
       };
 }
 
-export function renderContract(sequences, publicDir) {
+/**
+ * The SITE_URL block, or nothing at all when nobody said where the site lives.
+ *
+ * Nothing rather than `= null` on purpose. The stub in templates/ is what the
+ * upgrade record hashes, so a project that has run `frames` only stays out of
+ * `scaffold --diff` while the stub is untouched: change it and every existing
+ * project is told its GENERATED contract "changed in the template AND was
+ * edited by you", with adopting offered as the fix — which would swap real
+ * measured sequences for an empty placeholder.
+ *
+ * So the export appears only when it was asked for, and the stub keeps quiet.
+ * When something actually reads SITE_URL it will want the opposite — always
+ * exported, null when unset, declared in each frames.d.ts — because a named
+ * import of an export that is sometimes absent fails at link time. That is a
+ * change to make alongside the first consumer, not before one exists.
+ */
+function siteUrlSource(siteUrl) {
+  if (siteUrl === undefined || siteUrl === null) return "";
+
+  return `
+/**
+ * The base url this page is served from, recorded by \`--site-url\`.
+ *
+ * A page cannot work this out for itself. \`document.baseURI\` answers for a
+ * browser that has already fetched the page, which is exactly the visitor who
+ * does not need the answer, and a crawler building a link preview never runs
+ * the page at all.
+ *
+ * Ends in a slash, so \`new URL(path, SITE_URL)\` lands under the site rather
+ * than beside it.
+ *
+ * @type {string}
+ */
+export const SITE_URL = ${JSON.stringify(siteUrl)};
+`;
+}
+
+export function renderContract(sequences, publicDir, siteUrl) {
   const json = JSON.stringify(
     sequences.map((s) => ({
       id: s.id,
@@ -523,7 +560,7 @@ export function renderContract(sequences, publicDir) {
 
 export const LUMA_COLS = ${LUMA_COLS};
 export const LUMA_ROWS = ${LUMA_ROWS};
-
+${siteUrlSource(siteUrl)}
 /**
  * Ordered by preference. The page picks whichever sequence best matches the
  * viewport.
@@ -669,7 +706,7 @@ async function frames(positionals, flags) {
 
     const framesOut = join(projectDir, template.framesPath);
     mkdirSync(dirname(framesOut), { recursive: true });
-    writeFileSync(framesOut, renderContract(sequences, template.publicDir));
+    writeFileSync(framesOut, renderContract(sequences, template.publicDir, flags["site-url"]));
 
     // A template with no render step cannot build its own story outline, and
     // that outline is what assistive technology reads and what the page becomes
