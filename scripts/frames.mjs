@@ -33,6 +33,9 @@ import { tmpdir } from "node:os";
 import { basename, dirname, extname, join } from "node:path";
 
 import { edgeColor, lumaGrid, LUMA_COLS, LUMA_ROWS } from "../lib/measure.mjs";
+// Defined in lib/ rather than here because three templates refer to this file
+// during their own builds and none of them can import the CLI.
+import { CARD_FILE, CARD_WIDTH, CARD_HEIGHT } from "../lib/social-card.mjs";
 import { naturalCompare, decimate, timestampsFor } from "../lib/sequence-plan.mjs";
 import { DEFAULT_TEMPLATE, resolveTemplate } from "../lib/template-manifest.mjs";
 import { replaceOutline } from "../lib/outline.mjs";
@@ -380,6 +383,10 @@ function planSequences({ width, height, maxWidth, focus, skipPortrait }) {
   return plans;
 }
 
+// Re-exported because this is where the card is written; the value lives in
+// lib/ so three templates can name the same file without importing the CLI.
+export { CARD_FILE };
+
 /* -------------------------------------------------------------- contract -- */
 
 /**
@@ -497,33 +504,6 @@ export function framePathSource(publicDir) {
           " * rewrite.",
         body: "  return `/frames/${sequenceId}_${index}.webp`;",
       };
-}
-
-/**
- * The link-preview card: name, size, and how a page refers to it.
- *
- * 1200x630 because that is what every unfurler crops toward; anything else gets
- * cropped for you, and rarely where you would have chosen.
- *
- * JPEG, not webp. The frames are webp because the page decodes them and the
- * page is a browser. A link unfurler is somebody else's code — Slack's, X's,
- * whatever a chat app embeds — and webp support across that set is unverified.
- * This is the one asset where the decoder is not ours to check.
- */
-export const CARD_FILE = "og.jpg";
-const CARD_WIDTH = 1200;
-const CARD_HEIGHT = 630;
-
-/**
- * How a page refers to the card, given where the template serves static files.
- *
- * The same split as framePathSource: the html template puts everything beside
- * the page, while a framework's public/ is served at the site root. Resolved
- * against SITE_URL, "og.jpg" lands under a base path and "/og.jpg" at the root
- * — which is what each one needs.
- */
-export function cardPathFor(publicDir) {
-  return publicDir === "." ? CARD_FILE : `/${CARD_FILE}`;
 }
 
 /**
@@ -779,10 +759,9 @@ async function frames(positionals, flags) {
     // that outline is what assistive technology reads and what the page becomes
     // under reduced motion. Regenerated from the story so the two cannot drift.
     if (template.outlinePath) {
-      writeOutline(projectDir, template, {
-        siteUrl: flags["site-url"],
-        cardPath: cardPathFor(template.publicDir),
-      });
+      // No card path: lib/social-card.mjs names the card relative to the site
+      // url, which already carries the base path.
+      writeOutline(projectDir, template, { siteUrl: flags["site-url"] });
     }
 
     report({ sequences, bytes, warnings });

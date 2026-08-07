@@ -29,11 +29,13 @@ import { promisify } from "node:util";
 import ffmpegPath from "ffmpeg-static";
 import sharp from "sharp";
 
-import { BUILD_PLANS, missingArtifacts } from "./template-build.mjs";
+import { ARTIFACTS, GATE_SITE_URL, BUILD_PLANS, missingArtifacts } from "./template-build.mjs";
 
 const run = promisify(execFile);
 
 const CLI = fileURLToPath(new URL("../bin/cli.mjs", import.meta.url));
+
+
 const REPO = fileURLToPath(new URL("..", import.meta.url));
 
 const FRAME_COUNT = 12;
@@ -135,7 +137,20 @@ async function main() {
     log(`[${template}] measuring and encoding frames`);
     await run(
       process.execPath,
-      [CLI, "frames", clip, project, "--frames", String(SAMPLED), "--skip-portrait"],
+      // A site url, so the build has a card to emit. Without one the card tags
+      // are empty by design, and a gate that only ever sees the empty case
+      // cannot tell a template that fills them from one that does not.
+      [
+        CLI,
+        "frames",
+        clip,
+        project,
+        "--frames",
+        String(SAMPLED),
+        "--skip-portrait",
+        "--site-url",
+        GATE_SITE_URL,
+      ],
       { cwd: REPO },
     );
 
@@ -174,7 +189,9 @@ async function main() {
     }
 
     const how = plan.build ? "built output" : "scaffolded tree (this template has no build)";
-    log(`[${template}] OK — worker, stylesheet, reduced-motion rules and frames all in the ${how}`);
+    // Named from ARTIFACTS rather than written out, so adding one cannot leave
+    // this line quietly claiming less than the gate checked.
+    log(`[${template}] OK — ${ARTIFACTS.map((a) => a.name).join(", ")} all in the ${how}`);
   } finally {
     // Best effort: a gate that fails because it could not delete a temp
     // directory reports the wrong problem. Said out loud all the same — a

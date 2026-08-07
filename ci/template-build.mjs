@@ -101,7 +101,18 @@ const isStylesheet = (path) => path.endsWith(".css") || path.endsWith(".html");
  * by a sourcemap, a build cache, or the engine's own feature detection, none of
  * which mean the browser received anything.
  */
+/**
+ * The address the gate builds against.
+ *
+ * Under a base path on purpose: the first version of the framework card
+ * templates named the card "/og.jpg", correct at an origin root and silently
+ * wrong under a subdirectory. A gate that only built for a root would have
+ * passed it.
+ */
+export const GATE_SITE_URL = "https://example.test/gate/";
+
 export const ARTIFACTS = [
+
   {
     name: "decoder worker",
     // Three markers, all of which have to be in the same served file, because
@@ -154,6 +165,31 @@ export const ARTIFACTS = [
     // The measurement is the part of this tool nobody else does. A build that
     // emits the engine but not the footage renders a black canvas forever.
     find: (f) => f.path.endsWith(".webp"),
+  },
+  {
+    name: "link preview card",
+    // The image itself. `frames` writes it for every template, so a build that
+    // does not carry it is one whose static directory did not survive.
+    find: (f) => f.path.endsWith("og.jpg"),
+  },
+  {
+    name: "card tags",
+    // The tags that point at it, matched by the ABSOLUTE url rather than by the
+    // string "og:image".
+    //
+    // That restriction is load-bearing rather than tidy, the same way the
+    // reduced-motion one is. Nuxt bundles unhead, whose own source contains
+    // "og:image", "og:image:url" and "og:image:secure_url" — so matching the
+    // property name would pass on a template that emits no card at all, and
+    // this check would be unfailable on exactly the stack it was added for.
+    //
+    // The full url cannot come from anywhere but this project's own head: it is
+    // the gate's site url with the card's filename under it, which is also what
+    // proves the base path survived. A template naming the card "/og.jpg" would
+    // emit https://example.test/og.jpg and fail here.
+    find: (f) =>
+      (isServedScript(f.path) || isStylesheet(f.path)) &&
+      f.text.includes(`${GATE_SITE_URL}og.jpg`),
   },
 ];
 

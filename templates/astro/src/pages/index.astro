@@ -10,13 +10,31 @@
  * The scrubbing itself is the same engine every other template gets. This file
  * is the markup plus the handful of lines that hand it a container.
  */
+// Two imports of one module, on purpose. The named one is what a bundler
+// traces, and this project has shipped a broken page before by making an import
+// less legible to one. The namespace one exists only for SITE_URL, which is in
+// the contract only once `frames --site-url` has recorded one — a named import
+// of an absent export fails at build time, so a project that has never run
+// frames would not compile. Asking through the namespace gets undefined, which
+// is already the "no image" case.
 import { SEQUENCES, framePath } from "../components/frames.js";
+import * as frames from "../components/frames.js";
 import { story } from "../components/story.js";
+import { cardFields } from "../lib/social-card.mjs";
 import { scrollHeightVh } from "../lib/scroll-math.mjs";
 import "../lib/scroll-engine.css";
 
 const sequence = SEQUENCES[0];
 const runwayHeight = sequence ? `${scrollHeightVh(sequence.totalFrames)}vh` : undefined;
+
+// What the card contains comes from lib/social-card.mjs, which every template
+// reads. This is Astro's way of putting it in a head — the mechanism, not the
+// answer. Four mechanisms is right; four answers would drift, and the drift is
+// invisible because every page still renders.
+//
+// No card path is passed: the module names the card relative to the site url,
+// which already carries any base path this is deployed under.
+const card = cardFields({ story, siteUrl: frames.SITE_URL });
 ---
 
 <!doctype html>
@@ -26,6 +44,22 @@ const runwayHeight = sequence ? `${scrollHeightVh(sequence.totalFrames)}vh` : un
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{story.title}</title>
     <meta name="description" content={story.description} />
+
+    <meta property="og:type" content={card.type} />
+    <meta property="og:title" content={card.title} />
+    <meta property="og:description" content={card.description} />
+    <meta name="twitter:card" content={card.twitterCard} />
+    <meta name="twitter:title" content={card.title} />
+    <meta name="twitter:description" content={card.description} />
+    {/*
+      Rendered only when there is a site url to resolve against. An empty
+      og:image is a relative reference that resolves to the page itself, so a
+      strict crawler fetches the HTML and calls that the preview image — worse
+      than having no tag at all.
+    */}
+    {card.url && <meta property="og:url" content={card.url} />}
+    {card.image && <meta property="og:image" content={card.image} />}
+    {card.image && <meta name="twitter:image" content={card.image} />}
   </head>
   <body>
     {/*

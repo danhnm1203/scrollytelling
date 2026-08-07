@@ -52,17 +52,19 @@ const RENAMES = new Map([["gitignore.template", ".gitignore"]]);
 /**
  * Files copied from outside `templates/`, as [source, path in the project].
  *
+ * Named for when they are COPIED, not for when they run: most are runtime, but
+ * social-card.mjs is read by three templates during their own build.
+ *
  * The display math is deliberately NOT duplicated under templates/. One copy
  * in this repo means it cannot drift from the version the tests cover — a
  * checked-in duplicate would be a fork the moment someone edited one of them.
  */
-const RUNTIME_FILES = [
+const INSTALLED_FILES = [
   "scroll-math.mjs",
   "scroll-math.d.ts",
-  // Not runtime — every template reads this during ITS OWN build, to fill the
-  // head. It rides here because the reason is the same: four templates each
-  // deciding what a link preview contains is four chances to drift, and the
-  // drift is invisible because every page still renders.
+  // Read at each template's own build time rather than at runtime, and here for
+  // the same reason as the rest: one copy cannot drift from the one the tests
+  // cover.
   "social-card.mjs",
   "social-card.d.ts",
   "scroll-engine-state.mjs",
@@ -135,7 +137,6 @@ function byCodePoint(a, b) {
   return 0;
 }
 
-/** Every file under `templates/`, as paths relative to it. */
 /**
  * What a framework leaves behind in a template directory while someone works
  * on it, and which must never reach a generated project.
@@ -154,6 +155,7 @@ export function isTemplateFile(name) {
   return !BUILD_ARTIFACTS.has(name) && !name.endsWith(".tsbuildinfo");
 }
 
+/** Every file under `templates/`, as paths relative to it. */
 function templateFiles(dir, prefix = "") {
   const out = [];
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -188,7 +190,7 @@ function installableFiles(templateName = DEFAULT_TEMPLATE) {
     // moving templates/* into templates/next/ needs no migration of an existing
     // .scrollytelling-version: every recorded key is byte-identical.
     ...templateFiles(root).map((rel) => [join(root, rel), targetName(rel)]),
-    ...RUNTIME_FILES.map((name) => [
+    ...INSTALLED_FILES.map((name) => [
       fileURLToPath(new URL(`../lib/${name}`, import.meta.url)),
       `${template.libDir}/${name}`,
     ]),

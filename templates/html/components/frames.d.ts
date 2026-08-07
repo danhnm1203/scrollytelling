@@ -23,6 +23,19 @@ export type Sequence = {
 export declare const LUMA_COLS: number;
 export declare const LUMA_ROWS: number;
 
+/**
+ * Where this page is served from, once `frames --site-url <url>` has
+ * recorded one. `undefined` until then, which is why a template reads it
+ * through a namespace import rather than a named one: the value is written
+ * into frames.js only when it is known, and a named import of an export
+ * that is not there fails at build time.
+ *
+ * Declared here rather than in the .js stub on purpose. This file is static
+ * and `frames` never rewrites it, so changing it cannot make a project's
+ * GENERATED contract look edited to `scaffold --diff`.
+ */
+export declare const SITE_URL: string | undefined;
+
 /** Ordered by preference; empty until footage has been processed. */
 export declare const SEQUENCES: readonly Sequence[];
 

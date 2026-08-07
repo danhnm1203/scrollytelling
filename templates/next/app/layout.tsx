@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 
-import { SEQUENCES, framePath } from "@/components/frames";
+import * as frames from "@/components/frames";
 import { story } from "@/components/story";
+import { cardFields } from "@/lib/social-card";
 
 import "./globals.css";
 import "@/lib/scroll-engine.css";
@@ -10,26 +11,56 @@ import "@/lib/scroll-engine.css";
 // Self-hosted by next/font, so the page makes no network request for it.
 const inter = Inter({ subsets: ["latin"], display: "swap" });
 
-// The opening frame doubles as the link preview image, so sharing the page
-// shows the footage rather than a blank card.
-const poster = SEQUENCES[0] ? framePath(SEQUENCES[0].id, 0) : undefined;
+// What the card contains comes from lib/social-card.mjs, which every template
+// reads. This is Next's way of putting it in a head — the mechanism, not the
+// answer. Four mechanisms is right; four answers would drift, and the drift is
+// invisible because every page still renders.
+//
+// It points at og.jpg rather than at the opening frame. The frames are webp
+// because this page decodes them and this page is a browser; a link unfurler is
+// somebody else's code, and webp support across that set is unverified. `frames`
+// writes a jpeg card for exactly this.
+//
+// SITE_URL first, then the environment. SITE_URL is what `frames --site-url`
+// recorded, so it is the same answer the other three templates get; the env var
+// stays as the way to set it for a `next build` that has not been given one.
+const siteUrl = frames.SITE_URL ?? process.env.SITE_URL ?? null;
+const card = cardFields({ story, siteUrl });
+
+// `frames.SITE_URL` was validated by the CLI. `process.env.SITE_URL` was not,
+// and `new URL()` on a typo would throw at module load — killing `next build`
+// over a link preview, which is the trade lib/social-card.mjs exists to refuse.
+function baseOrLocalhost(value: string | null): URL {
+  const fallback = new URL("http://localhost:3000");
+  if (!value) return fallback;
+  try {
+    return new URL(value);
+  } catch {
+    return fallback;
+  }
+}
 
 export const metadata: Metadata = {
-  // Set this to your deployed origin so the preview image resolves absolutely.
-  metadataBase: new URL(process.env.SITE_URL ?? "http://localhost:3000"),
+  // Next resolves any remaining relative url in this file against this. It is
+  // separate from the card, which is already absolute or absent.
+  metadataBase: baseOrLocalhost(siteUrl),
   title: story.title,
   description: story.description,
   openGraph: {
-    title: story.title,
-    description: story.description,
+    title: card.title ?? undefined,
+    description: card.description ?? undefined,
     type: "website",
-    images: poster ? [{ url: poster }] : undefined,
+    url: card.url ?? undefined,
+    // Omitted rather than empty when there is no site url: an empty og:image is
+    // a relative reference that resolves to the page itself, so a strict
+    // crawler fetches the HTML and calls that the preview image.
+    images: card.image ? [{ url: card.image }] : undefined,
   },
   twitter: {
-    card: poster ? "summary_large_image" : "summary",
-    title: story.title,
-    description: story.description,
-    images: poster ? [poster] : undefined,
+    card: card.twitterCard,
+    title: card.title ?? undefined,
+    description: card.description ?? undefined,
+    images: card.image ? [card.image] : undefined,
   },
 };
 
