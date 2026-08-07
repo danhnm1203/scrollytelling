@@ -735,6 +735,14 @@ describe("frames — preview mode", () => {
     const dir = /(\/[^\s]*ost-preview[^\s]*)/.exec(stdout)?.[1];
     assert.ok(dir, `expected a path in the output, got: ${stdout}`);
     assert.ok(existsSync(dir));
+    const listed = Array.from({ length: 5 }, (_, i) => join(dir, `preview_${i}.png`));
+    for (const file of listed) assert.ok(stdout.includes(file), `missing ${file} in output`);
+    for (let i = 1; i < listed.length; i++) {
+      assert.ok(
+        stdout.indexOf(listed[i - 1]) < stdout.indexOf(listed[i]),
+        `preview files should be listed in sequence order: ${stdout}`,
+      );
+    }
     writeFileSync(join(dir, ".keep"), ""); // proves it is a real, usable directory
   });
 });
