@@ -54,11 +54,28 @@ jobs:
 
       - run: npm ci
 
+      # --site-url is what lets the page carry a link preview. A page cannot
+      # work out its own address: document.baseURI answers for a browser that
+      # already fetched it, and a crawler building a preview never runs the page
+      # at all. Hardcoded rather than taken from the deploy step's output,
+      # because the build has to know before it writes the page, and this
+      # address has been in package.json and the README since 0.6.0.
+      #
+      # The build fails if that preview does not come out publishable — see
+      # tools/demo-card.mjs for what it checks and why each check is there.
       - name: Build the sample site
-        run: >-
-          node tools/sample-site.mjs --template html --frames 50
-          --clip tools/demo-clip.mp4 --story tools/demo-story.js
-          --sections tools/demo-sections.html
+        # The address comes from package.json `homepage` rather than being
+        # written here as well. It is already the canonical statement of where
+        # this project lives — npm shows it, the README links it — and a second
+        # copy in a workflow is a copy that drifts, silently, into a page whose
+        # preview points at the wrong place.
+        run: |
+          site=$(node -p "require('./package.json').homepage")
+          echo "building for $site"
+          node tools/sample-site.mjs --template html --frames 50 \
+            --clip tools/demo-clip.mp4 --story tools/demo-story.js \
+            --sections tools/demo-sections.html \
+            --site-url "$site"
 
       - name: Fail if the page has no frames to show
         # The build can exit 0 having written a page that holds one frame

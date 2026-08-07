@@ -19,6 +19,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, describe, it } from "node:test";
+import { fileURLToPath } from "node:url";
 
 import { run } from "../scripts/scaffold.mjs";
 
@@ -740,5 +741,43 @@ describe("scaffold", () => {
 
     assert.notEqual(code, 0);
     assert.match(stderr, /project/i);
+  });
+});
+
+describe("what the demo keeps to itself", () => {
+  // The demo's address is a build argument, and its copy is tools/demo-story.js.
+  // Neither belongs in what a stranger scaffolds: a project that shipped
+  // telling the world about this repository's demo would be a bug nobody would
+  // think to look for, because the page renders perfectly.
+
+  const templateFiles = () => {
+    const out = [];
+    const walk = (dir) => {
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        if (entry.name === "node_modules") continue;
+        const path = join(dir, entry.name);
+        if (entry.isDirectory()) walk(path);
+        else if (/\.(html|js|mjs|ts|tsx|vue|astro|json)$/.test(entry.name)) out.push(path);
+      }
+    };
+    walk(fileURLToPath(new URL("../templates", import.meta.url)));
+    return out;
+  };
+
+  it("keeps the demo's address out of every template", () => {
+    const leaked = templateFiles().filter((f) =>
+      readFileSync(f, "utf8").includes("danhnm1203.github.io"),
+    );
+    assert.deepEqual(leaked, [], "a scaffolded project must not point at this repo's demo");
+  });
+
+  it("keeps the demo's copy out of every template", () => {
+    // demo-story.js writes over the template's story during the sample build.
+    // If a phrase from it turned up in templates/, the copy had been pasted
+    // rather than passed.
+    const leaked = templateFiles().filter((f) =>
+      readFileSync(f, "utf8").includes("Amiana"),
+    );
+    assert.deepEqual(leaked, [], "the demo's copy must not be baked into a template");
   });
 });
