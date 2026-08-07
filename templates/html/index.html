@@ -33,7 +33,12 @@
         height: 100vh;
         width: 100%;
       }
-      [data-scrollytelling-empty] {
+      /* :not([hidden]) is load-bearing. The browser hides [hidden] with
+         `display: none` from its own stylesheet, and any author rule with an
+         attribute selector outranks it — so without this guard the panel below
+         renders on every page that HAS frames, while element.hidden still
+         reports true and the console stays clean. */
+      [data-scrollytelling-empty]:not([hidden]) {
         display: grid;
         min-height: 100vh;
         place-items: center;

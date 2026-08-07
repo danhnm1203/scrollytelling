@@ -5,6 +5,31 @@ Notable changes to `@danhnm1203/scrollytelling`.
 This file starts at 0.2.0. Earlier releases predate it and are not reconstructed
 here — inventing history is worse than admitting it was not kept.
 
+## Unreleased
+
+### Fixed
+
+- **"No frames yet" showed on pages that had frames.** The `html` template
+  styled its empty-state panel with `[data-scrollytelling-empty] { display:
+  grid }`. That panel ships with the `hidden` attribute and is un-hidden only
+  when there is no sequence — but an author rule with an attribute selector
+  outranks the browser's own `[hidden] { display: none }`, so every generated
+  page rendered a full extra screen reading *"Generate a sequence to make this
+  page scroll"* underneath a page that already scrolled.
+
+  Nothing reported it. `element.hidden` still returned `true`, the console
+  stayed clean, and the canvas above it worked perfectly. The selector is now
+  guarded with `:not([hidden])`.
+
+  If you generated an `html` project with 0.6.0, the fix is one line in
+  `index.html`: change `[data-scrollytelling-empty]` to
+  `[data-scrollytelling-empty]:not([hidden])`.
+
+### Added
+
+- **`homepage` points at the live demo**, on npm and in the plugin manifest, and
+  the README links it above the fold.
+
 ## 0.6.0 — a page you can scroll, and it works where you put it
 
 Four templates have shipped since 0.5.0, but everything describing this tool

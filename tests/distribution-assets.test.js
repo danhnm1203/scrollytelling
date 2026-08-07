@@ -29,9 +29,9 @@
  * reference moved to docs/en/, and that what sits above its fold says the things
  * a stranger needs before deciding to scroll.
  *
- * Three parts of that fold — the GIF, the demo links and `homepage` — are not
- * asserted, because the pages they point at do not exist yet. A rule that passes
- * by pointing nowhere is worse than no rule; the debt is carried as a todo.
+ * The demo page exists now, so the fold's link to it and `homepage` are both
+ * asserted. What is still carried as a todo is the gallery, which cannot be
+ * asserted properly until a real entry is in it.
  */
 
 import assert from "node:assert/strict";
@@ -216,11 +216,37 @@ describe("the npm package metadata", () => {
     }
   });
 
-  it.todo("has a homepage pointing at the demo index — waiting on the demos to exist");
+  it("points at a page a reader can open", () => {
+    // npm shows this beside the install command, and it is the only link a
+    // reader gets before deciding whether to install anything. It is asserted
+    // to exist and to be absolute, never fetched — a test that reaches the
+    // network is a test that fails on a plane.
+    assert.ok(pkg.homepage, "package.json has no homepage");
+    assert.doesNotThrow(() => new URL(pkg.homepage), `homepage is not an absolute url: ${pkg.homepage}`);
+  });
+
+  it("sends that reader to the demo rather than back to the repository", () => {
+    // The repository is already linked from `repository`. A homepage pointing
+    // at the same place wastes the one field that can show the output.
+    assert.doesNotMatch(
+      pkg.homepage,
+      /github\.com\/danhnm1203\/scrollytelling\/?$/,
+      "homepage duplicates the repository link instead of showing a page",
+    );
+  });
 
   it("still points at the repository it lives in", () => {
-    // Cheap, but this is the only link npm shows before a homepage exists.
     assert.match(pkg.repository.url, /github\.com\/danhnm1203\/scrollytelling/);
+  });
+
+  it("sends a plugin reader to the same page as an npm reader", () => {
+    // Two manifests, one product. They drifted silently before, when the
+    // plugin's homepage pointed at the repository and npm's at the demo.
+    assert.equal(
+      new URL(plugin.homepage).href,
+      new URL(pkg.homepage).href,
+      "the plugin manifest and package.json disagree about where the page is",
+    );
   });
 });
 
@@ -230,10 +256,8 @@ describe("the README above the fold", () => {
    * approximate by nature, so these rules are about what must appear within it,
    * never about how many lines the file has.
    *
-   * The GIF, the three demo links and `package.json.homepage` are the rest of
-   * this fold and are NOT asserted here, because the pages they point at do not
-   * exist yet. Assertions that pass by pointing nowhere would be worse than
-   * none — see the note in this file's PR.
+   * The GIF is still not asserted: there is no recording yet. The demo link is,
+   * because the page it points at is published.
    */
   const FOLD_LINES = 20;
   const fold = readme.split("\n").slice(0, FOLD_LINES).join("\n");
@@ -247,6 +271,16 @@ describe("the README above the fold", () => {
       [],
       "the fold does not name every stack",
     );
+  });
+
+  it("offers a page to look at before asking for an install", () => {
+    // The one thing prose cannot do for this project is show what it makes.
+    // The link has to be above the fold, and it has to be the same place
+    // package.json sends an npm reader.
+    // Matched without the trailing slash: the two files are edited by different
+    // hands and one of them will eventually drop it, which is not a defect.
+    const bare = pkg.homepage.replace(/\/+$/, "");
+    assert.ok(fold.includes(bare), `the fold does not link ${bare}`);
   });
 
   it("asks for one install command, not a choice between two", () => {

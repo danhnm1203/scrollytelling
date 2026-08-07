@@ -15,6 +15,8 @@ dependency beyond the framework you already chose.
 npx @danhnm1203/scrollytelling scaffold ./my-site
 ```
 
+**[Scroll the demo →](https://danhnm1203.github.io/scrollytelling/)** — built by this tool, from a video, in one command.
+
 [![test](https://github.com/danhnm1203/scrollytelling/actions/workflows/test.yml/badge.svg)](https://github.com/danhnm1203/scrollytelling/actions/workflows/test.yml)
 [![node](https://img.shields.io/badge/node-%E2%89%A520-3c873a)](https://nodejs.org)
 [![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
