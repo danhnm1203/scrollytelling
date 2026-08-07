@@ -13,17 +13,49 @@
 import { onMounted, onBeforeUnmount, ref } from "vue";
 import { useHead } from "#imports";
 
+// Two imports of one module, on purpose. The named one is what a bundler
+// traces, and this project has shipped a broken page before by making an import
+// less legible to one. The namespace one exists only for SITE_URL, which is in
+// the contract only once `frames --site-url` has recorded one — a named import
+// of an absent export fails at build time, so a project that has never run
+// frames would not compile. Asking through the namespace gets undefined, which
+// is already the "no image" case.
 import { SEQUENCES, framePath } from "./components/frames.js";
+import * as frames from "./components/frames.js";
 import { story } from "./components/story.js";
+import { cardFields } from "./lib/social-card.mjs";
 import { scrollHeightVh } from "./lib/scroll-math.mjs";
 import { mount } from "./lib/scroll-engine.mjs";
 
 const sequence = SEQUENCES[0];
 const runwayHeight = sequence ? `${scrollHeightVh(sequence.totalFrames)}vh` : undefined;
 
+// What the card contains comes from lib/social-card.mjs, which every template
+// reads. This is Nuxt's way of putting it in a head — the mechanism, not the
+// answer. Four mechanisms is right; four answers would drift, and the drift is
+// invisible because every page still renders.
+//
+// No card path is passed: the module names the card relative to the site url,
+// which already carries any base path this is deployed under.
+const card = cardFields({ story, siteUrl: frames.SITE_URL });
+
 useHead({
   title: story.title,
-  meta: [{ name: "description", content: story.description }],
+  meta: [
+    { name: "description", content: story.description },
+    { property: "og:type", content: card.type },
+    { property: "og:title", content: card.title },
+    { property: "og:description", content: card.description },
+    // Dropped rather than emitted empty when there is no site url: an empty
+    // og:image is a relative reference that resolves to the page itself, so a
+    // strict crawler fetches the HTML and calls it the preview image.
+    ...(card.url ? [{ property: "og:url", content: card.url }] : []),
+    ...(card.image ? [{ property: "og:image", content: card.image }] : []),
+    { name: "twitter:card", content: card.twitterCard },
+    { name: "twitter:title", content: card.title },
+    { name: "twitter:description", content: card.description },
+    ...(card.image ? [{ name: "twitter:image", content: card.image }] : []),
+  ],
 });
 
 const container = ref(null);

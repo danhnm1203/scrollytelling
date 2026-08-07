@@ -27,7 +27,7 @@ import sharp from "sharp";
 
 import { pathToFileURL } from "node:url";
 
-import { CARD_FILE, cardPathFor, framePathSource, renderContract, run } from "../scripts/frames.mjs";
+import { CARD_FILE, framePathSource, renderContract, run } from "../scripts/frames.mjs";
 import { run as scaffoldRun } from "../scripts/scaffold.mjs";
 import { TEMPLATES, templateNames } from "../lib/template-manifest.mjs";
 
@@ -918,15 +918,6 @@ describe("the card a link preview shows", () => {
     const page = readFileSync(join(project, "index.html"), "utf8");
     assert.match(page, /<meta property="og:image" content="" \/>/);
     assert.match(page, /<meta name="twitter:image" content="" \/>/);
-  });
-
-  it("is referred to differently depending on where the template serves files", () => {
-    // The same split framePathSource makes. Resolved against a base url ending
-    // in a slash, "og.jpg" lands under a project site's path while "/og.jpg"
-    // goes to the origin root — which is where a framework's public/ is served.
-    const base = "https://you.github.io/repo/";
-    assert.equal(new URL(cardPathFor("."), base).href, "https://you.github.io/repo/og.jpg");
-    assert.equal(new URL(cardPathFor("public"), base).href, "https://you.github.io/og.jpg");
   });
 
   it("does not fail the run when the card cannot be written", async () => {

@@ -17,6 +17,8 @@
     "lib",
     "scripts",
     "templates",
+    "!templates/**/*.tsbuildinfo",
+    "!templates/**/node_modules",
     "skills",
     ".claude-plugin",
     "CHANGELOG.md"

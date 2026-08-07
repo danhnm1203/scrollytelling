@@ -17,6 +17,9 @@ lib/scroll-math.mjs  the primitives — scale, easing, fade, scrim. pure, fully 
 lib/scroll-engine-state.mjs
                      what the runtime decides, composed from those primitives:
                      load state, decode window, draw parameters. pure, no DOM
+lib/social-card.mjs  what a link preview says. one answer for four templates,
+                     each of which still puts it in a head its own way. copied
+                     into every project, like scroll-math
 lib/template-manifest.mjs
                      where each template keeps its things — one list, read by
                      the scaffolder and the frame pipeline

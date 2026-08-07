@@ -21,7 +21,7 @@ import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { BUILD_PLANS, ARTIFACTS, missingArtifacts } from "../ci/template-build.mjs";
+import { BUILD_PLANS, ARTIFACTS, GATE_SITE_URL, missingArtifacts } from "../ci/template-build.mjs";
 import { templateNames } from "../lib/template-manifest.mjs";
 
 /** A build output that has everything, as {path, text} pairs. */
@@ -30,6 +30,11 @@ function goodBuild() {
     { path: "_astro/decoder.worker.Br9kQ2.js", text: 'self.onmessage=async e=>{...Error("HTTP "+r.status);const b=await createImageBitmap(x);self.postMessage({index:i},[b])}' },
     { path: "_astro/index.CxY1.css", text: ".st-beat__scrim{background:radial-gradient(...)}@media (prefers-reduced-motion:reduce){.story-outline{position:static}}" },
     { path: "frames/landscape_0.webp", text: "" },
+    { path: "og.jpg", text: "" },
+    {
+      path: "index.html",
+      text: `<meta property="og:image" content="${GATE_SITE_URL}og.jpg" />`,
+    },
   ];
 }
 
@@ -96,6 +101,42 @@ describe("the build plans", () => {
 });
 
 describe("missingArtifacts", () => {
+  it("catches a build that emitted no card image", () => {
+    const files = goodBuild().filter((f) => !f.path.endsWith("og.jpg") || f.path.endsWith(".html"));
+    assert.deepEqual(missingArtifacts(files), ["link preview card"]);
+  });
+
+  it("catches a page whose card tags were never filled", () => {
+    // The empty-tag case a successful build can still leave: everything else
+    // shipped, and every share of the page is a bare url.
+    const files = goodBuild().map((f) =>
+      f.path.endsWith(".html") ? { ...f, text: '<meta property="og:image" content="" />' } : f,
+    );
+    assert.deepEqual(missingArtifacts(files), ["card tags"]);
+  });
+
+  it("catches a card named at the origin root rather than under the site", () => {
+    // The bug this artifact was added for. "/og.jpg" is right at an origin root
+    // and silently wrong under a base path, and it looks correct in the markup.
+    const files = goodBuild().map((f) =>
+      f.path.endsWith(".html")
+        ? { ...f, text: '<meta property="og:image" content="https://example.test/og.jpg" />' }
+        : f,
+    );
+    assert.deepEqual(missingArtifacts(files), ["card tags"]);
+  });
+
+  it("is not satisfied by a framework that merely mentions og:image", () => {
+    // Nuxt bundles unhead, whose own source contains "og:image". Matching the
+    // property name would make this check unfailable on that stack.
+    const files = goodBuild().map((f) =>
+      f.path.endsWith(".html")
+        ? { ...f, text: 'const tags=["og:image","og:image:url","og:image:secure_url"]' }
+        : f,
+    );
+    assert.deepEqual(missingArtifacts(files), ["card tags"]);
+  });
+
   it("passes a build that emitted everything", () => {
     assert.deepEqual(missingArtifacts(goodBuild()), []);
   });
@@ -188,5 +229,44 @@ describe("missingArtifacts", () => {
       f.path.includes("worker") ? { ...f, path: "static/chunks/pages.js.map" } : f,
     );
     assert.ok(missingArtifacts(notServed).includes("decoder worker"));
+  });
+});
+
+describe("templates whose document does not exist until it is asked for", () => {
+  // Nuxt renders per request, so its head is in no built file. The card url in
+  // particular is composed at request time from SITE_URL: the bundle carries
+  // the origin and the filename, never the joined string a crawler reads.
+  //
+  // CI is what found this. The gate walked 47 emitted files, proved the worker,
+  // the stylesheet and the frames had shipped, and could say nothing about the
+  // head — so it failed nuxt while the template was in fact correct. A gate
+  // that had matched on "og:image" instead would have passed it for the wrong
+  // reason, because unhead is in that bundle.
+
+  it("declares which templates have to be asked", () => {
+    assert.ok(BUILD_PLANS.nuxt.serve, "nuxt renders per request");
+    assert.deepEqual(BUILD_PLANS.nuxt.serve.argv, ["node", ".output/server/index.mjs"]);
+    assert.equal(BUILD_PLANS.nuxt.serve.path, "/");
+  });
+
+  it("leaves the templates that build a document alone", () => {
+    // Starting a server for a template that already wrote its page would be
+    // slower and prove nothing extra.
+    for (const name of ["next", "astro", "html"]) {
+      assert.equal(BUILD_PLANS[name].serve, undefined, `${name} builds a document`);
+    }
+  });
+
+  it("treats a served response as a document the artifacts can match", () => {
+    // The pseudo-path the gate gives a fetched page has to satisfy the same
+    // predicate a real .html file does, or every artifact silently skips it.
+    const served = {
+      path: "served/index.html",
+      text: `<meta property="og:image" content="${GATE_SITE_URL}og.jpg" />`,
+    };
+    const files = goodBuild()
+      .filter((f) => !f.path.endsWith(".html"))
+      .concat(served);
+    assert.deepEqual(missingArtifacts(files), []);
   });
 });
