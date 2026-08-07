@@ -50,6 +50,7 @@ const NOTES = {
  * @property {string} template      which template to scaffold
  * @property {string} out           where the project goes, relative to the repo
  * @property {string | null} clip   footage to use, or null to synthesise one
+ * @property {string | null} story  copy to write over the template's own, or null
  * @property {number} frames        how many frames in the sequence
  * @property {string[] | null} install argv to install dependencies, or null
  * @property {string[] | null} dev     argv to start it, or null
@@ -79,7 +80,7 @@ export function planSample(argv) {
     // Taking the last of a repeated flag would build something other than what
     // was asked for and say nothing about it.
     if (given.has(flag)) throw new Error(`${flag} was given twice`);
-    if (!["--template", "--out", "--clip", "--frames"].includes(flag)) {
+    if (!["--template", "--out", "--clip", "--frames", "--story"].includes(flag)) {
       throw new Error(`unknown option "${flag}"`);
     }
 
@@ -109,6 +110,7 @@ export function planSample(argv) {
     template,
     out,
     clip: given.get("--clip") ?? null,
+    story: given.get("--story") ?? null,
     frames: given.has("--frames") ? readCount(given.get("--frames")) : DEFAULT_FRAMES,
     install: build.install,
     dev: DEV[template],

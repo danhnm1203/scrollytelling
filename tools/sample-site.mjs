@@ -4,11 +4,15 @@
  *   npm run sample
  *   npm run sample -- --template astro
  *   npm run sample -- --clip ./my-footage.mp4 --frames 80
+ *   npm run sample -- --story ./tools/demo-story.js
  *
- * Scaffolds a project into `.sample-site/`, runs the real pipeline over it,
- * installs, and starts the dev server. Everything it writes is gitignored and
- * outside `files` in package.json, so a sample build can never reach anyone
+ * Scaffolds a project into `.sample-<template>/`, runs the real pipeline over
+ * it, installs, and starts the dev server. Everything it writes is gitignored
+ * and outside `files` in package.json, so a sample build can never reach anyone
  * else — not in a clone, not in a publish.
+ *
+ * The published demo page is this, run by .github/workflows/pages.yml with the
+ * html template and --story.
  *
  * Not shipped, and not part of `npm test`: this installs from the network and
  * spawns a server. The decisions it makes before any of that are pure and live
@@ -26,7 +30,7 @@
 
 import { execFile, spawn } from "node:child_process";
 import { existsSync } from "node:fs";
-import { mkdir, mkdtemp, rm } from "node:fs/promises";
+import { copyFile, mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -138,6 +142,17 @@ async function main() {
     await run(process.execPath, [CLI, "scaffold", project, "--template", plan.template], {
       cwd: REPO,
     });
+
+    if (plan.story) {
+      // Before frames rather than after: the html template has no render step,
+      // so `frames` is what writes the story outline into the page. Copying the
+      // story afterwards would leave the outline describing the old copy — and
+      // that outline is what a screen reader and a crawler read.
+      const story = resolve(process.cwd(), plan.story);
+      if (!existsSync(story)) throw new Error(`no such story: ${plan.story}`);
+      log(`writing the copy from ${plan.story}`);
+      await copyFile(story, join(project, "components", "story.js"));
+    }
 
     log(`measuring and encoding ${plan.frames} frames — this is the slow part`);
     await run(process.execPath, [CLI, "frames", clip, project, "--frames", String(plan.frames)], {

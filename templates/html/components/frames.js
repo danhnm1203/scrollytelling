@@ -22,15 +22,22 @@ export const SEQUENCES = [];
 /**
  * Where a given frame is served from.
  *
- * Edit this if the site is deployed under a subdirectory — a GitHub Pages
- * project site, or anything with a base path. It is the only place the runtime
- * learns where the frames are, which is why it is a function you can change
- * rather than a convention baked into the engine.
+ * The frames sit beside this page, so the path is resolved against the page
+ * itself: drop the directory anywhere — a GitHub Pages project site, a
+ * subfolder on a static host — and it keeps working with nothing to configure.
+ *
+ * It resolves to an absolute url on purpose. The engine hands these strings to
+ * a worker, and a worker resolves a relative url against its own script in
+ * `lib/` rather than against this page, so a relative path would 404 there
+ * while working fine for the poster image.
+ *
+ * It is still the only place the runtime learns where the frames are, so edit
+ * it if you move them.
  *
  * @param {string} sequenceId
  * @param {number} index
  * @returns {string}
  */
 export function framePath(sequenceId, index) {
-  return `/frames/${sequenceId}_${index}.webp`;
+  return new URL(`frames/${sequenceId}_${index}.webp`, document.baseURI).href;
 }

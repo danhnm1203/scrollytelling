@@ -456,7 +456,50 @@ function writeOutline(projectDir, template) {
   }
 }
 
-function renderContract(sequences, publicDir) {
+/**
+ * How the runtime is told where a frame is served from.
+ *
+ * Two shapes, decided by where the frames actually sit relative to the page.
+ *
+ * A framework's `public/` is served at the site root, so `/frames/…` is right
+ * and a relative path would be wrong the moment the page is not itself at the
+ * root of its own directory.
+ *
+ * The html template puts the frames beside `index.html`, wherever that has been
+ * dropped — including under a base path, which is where every GitHub Pages
+ * project site lives. That case has to resolve against the page, and it has to
+ * do so by producing an ABSOLUTE url: the engine hands these strings to a
+ * worker, and a worker resolves a relative url against its own script in
+ * `lib/` rather than against the document. `document.baseURI` is read on the
+ * main thread, where framePath is always called.
+ */
+export function framePathSource(publicDir) {
+  return publicDir === "."
+    ? {
+        // The trailing slash caveat is real but not worth a warning: a static
+        // host asked for a directory without one redirects to add it, which is
+        // what every deploy target this template is aimed at does.
+        note:
+          " * The frames sit beside this page, so this resolves against the page\n" +
+          " * itself: the built directory can be dropped under a base path — a GitHub\n" +
+          " * Pages project site among them — with nothing to configure.\n" +
+          " *\n" +
+          " * It resolves to an absolute url on purpose. The engine hands these strings\n" +
+          " * to a worker, and a worker resolves a relative url against its own script\n" +
+          " * in lib/ rather than against this page.",
+        body: "  return new URL(`frames/${sequenceId}_${index}.webp`, document.baseURI).href;",
+      }
+    : {
+        note:
+          " * Edit this if the site is deployed under a subdirectory — a GitHub Pages\n" +
+          " * project site, or anything with a base path. The frames are fetched at\n" +
+          " * runtime by the engine, which a framework's own base setting does not\n" +
+          " * rewrite.",
+        body: "  return `/frames/${sequenceId}_${index}.webp`;",
+      };
+}
+
+export function renderContract(sequences, publicDir) {
   const json = JSON.stringify(
     sequences.map((s) => ({
       id: s.id,
@@ -492,15 +535,17 @@ export const SEQUENCES = ${json};
 /**
  * Where a given frame is served from.
  *
- * Edit this if the site is deployed under a subdirectory. It is the only place
- * the runtime learns where the frames are.
+${framePathSource(publicDir).note}
+ *
+ * It is the only place the runtime learns where the frames are, which is why it
+ * is a function you can change rather than a convention baked into the engine.
  *
  * @param {string} sequenceId
  * @param {number} index
  * @returns {string}
  */
 export function framePath(sequenceId, index) {
-  return \`/frames/\${sequenceId}_\${index}.webp\`;
+${framePathSource(publicDir).body}
 }
 `;
 }

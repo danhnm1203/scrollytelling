@@ -14,7 +14,7 @@
  */
 
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 
 import { templateNames } from "../lib/template-manifest.mjs";
@@ -79,6 +79,43 @@ describe("a sample build reaches nobody else", () => {
 
   it("is one command", () => {
     assert.ok(pkg.scripts.sample, "expected an npm script to build the sample");
+  });
+});
+
+describe("the page the workflow publishes", () => {
+  // The deploy uploads a directory by name. If the planner's naming changes and
+  // the workflow's does not, the upload finds nothing and publishes an empty
+  // site — a green deploy of a blank page, which is the worst shape of failure
+  // available here.
+  const workflow = read("../.github/workflows/pages.yml");
+
+  it("builds the template it uploads", () => {
+    const built = workflow.match(/sample-site\.mjs --template (\S+)/)?.[1];
+    assert.ok(built, "the workflow does not build a sample");
+    // Anchored to the upload step: `path:` on its own would match the first
+    // one anywhere in the file, and a later step that happens to have a path
+    // would silently move what this asserts.
+    const uploaded = workflow.match(/upload-pages-artifact@v\d[\s\S]*?path:\s*(\S+)/)?.[1];
+    assert.equal(uploaded, planSample(["--template", built]).out);
+  });
+
+  it("refuses to publish a page with no frames", () => {
+    // The html template renders fine with an empty sequence, so this cannot be
+    // left to the build's exit code.
+    assert.match(workflow, /frames\/\*\.webp/);
+    assert.match(workflow, /::error::/);
+  });
+
+  it("publishes copy written for this project, not the template's placeholder", () => {
+    // The template ships a story about an invented product. That is right for a
+    // scaffolded project and wrong for the page at this project's own url.
+    const story = workflow.match(/--story (\S+)/)?.[1];
+    assert.ok(story, "the workflow does not override the template's copy");
+    assert.ok(existsSync(new URL(`../${story}`, import.meta.url)), `${story} does not exist`);
+  });
+
+  it("does not publish from a pull request", () => {
+    assert.match(workflow, /if:\s*github\.event_name != 'pull_request'/);
   });
 });
 
