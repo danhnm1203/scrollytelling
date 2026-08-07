@@ -15,7 +15,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { renderOutline, replaceOutline } from "../lib/outline.mjs";
+import { OPEN_MARKER, CLOSE_MARKER, renderOutline, replaceOutline } from "../lib/outline.mjs";
 
 const STORY = {
   brand: "ORBIT",
@@ -94,5 +94,67 @@ describe("replaceOutline", () => {
   it("refuses a page whose markers are the wrong way round", () => {
     const broken = "<!-- /scrollytelling:outline -->x<!-- scrollytelling:outline -->";
     assert.throws(() => replaceOutline(broken, STORY), /marker/i);
+  });
+});
+
+describe("the page's own title", () => {
+  // components/story.js declares `title` and `description`, and the framework
+  // templates put both in the document head — Next reads them for <title> and
+  // for Open Graph. The zero-build template has no render step, so if `frames`
+  // does not write them, they are silently dropped: the page carries the
+  // template's placeholder title forever.
+  //
+  // The symptom is invisible from inside the page. The body says one thing, the
+  // browser tab and every social preview say "ORBIT — every part accounted for",
+  // and nothing warns. This was found on a published page.
+
+  const PAGE = [
+    "<!doctype html>",
+    "<html>",
+    "  <head>",
+    "    <title>ORBIT — every part accounted for</title>",
+    '    <meta name="description" content="A scroll-driven look at Orbit." />',
+    "  </head>",
+    "  <body>",
+    `    ${OPEN_MARKER}`,
+    "    <main class=\"story-outline\"></main>",
+    `    ${CLOSE_MARKER}`,
+    "  </body>",
+    "</html>",
+  ].join("\n");
+
+  const STORY_WITH_HEAD = {
+    brand: "ACME",
+    title: "Acme — the real title",
+    description: "What this page is actually about.",
+    sections: [{ heading: "One", body: "First." }],
+  };
+
+  it("comes from the story", () => {
+    const out = replaceOutline(PAGE, STORY_WITH_HEAD);
+    assert.match(out, /<title>Acme — the real title<\/title>/);
+  });
+
+  it("takes the meta description with it", () => {
+    const out = replaceOutline(PAGE, STORY_WITH_HEAD);
+    assert.match(out, /name="description" content="What this page is actually about\."/);
+  });
+
+  it("escapes what it writes into the head", () => {
+    const out = replaceOutline(PAGE, { ...STORY_WITH_HEAD, title: 'Ampersand & "quote"' });
+    assert.match(out, /<title>Ampersand &amp; &quot;quote&quot;<\/title>/);
+    assert.doesNotMatch(out, /<title>[^<]*"quote"/);
+  });
+
+  it("leaves a page with no title alone rather than inventing one", () => {
+    // Someone may have deleted the tag on purpose. Rewriting the outline is
+    // this function's job; adding markup nobody asked for is not.
+    const headless = PAGE.replace(/\s*<title>.*<\/title>/, "");
+    assert.doesNotMatch(replaceOutline(headless, STORY_WITH_HEAD), /<title>/);
+  });
+
+  it("leaves the title alone when the story does not set one", () => {
+    const out = replaceOutline(PAGE, { brand: "ACME", sections: [] });
+    assert.match(out, /<title>ORBIT — every part accounted for<\/title>/);
   });
 });

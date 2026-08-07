@@ -30,6 +30,15 @@ deploying the `html` template anywhere but a domain root.
   still says, as it always did, that a deploy under a subdirectory needs that
   function edited.
 
+- **A zero-build page ignored the title and description in its own story.**
+  `components/story.js` declares both, and the framework templates put them in
+  the document head on every render — Next reads them for `<title>` and for Open
+  Graph. The `html` template has no render step, so they were dropped without a
+  word: the body said one thing while the browser tab and every social preview
+  said whatever the template shipped with. `frames` now writes both into the
+  head, and rewrites only tags that are already there — a page whose author
+  deleted its `<title>` did that on purpose.
+
 ### Changed
 
 - **The package stops describing itself as a Next.js tool.** Four stacks ship.
