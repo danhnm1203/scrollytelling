@@ -707,15 +707,20 @@ async function previewMode(positionals, flags, { sharp, ffmpegPath }) {
 
   try {
     const { sources } = await gatherSources(input, PREVIEW_FRAMES, workDir, ffmpegPath);
+    const files = [];
     for (const [i, source] of sources.entries()) {
+      const output = join(outDir, `preview_${i}.png`);
       await sharp(source)
         .resize(640, null, { withoutEnlargement: true })
         .png()
-        .toFile(join(outDir, `preview_${i}.png`));
+        .toFile(output);
+      files.push(output);
     }
 
     process.stdout.write(
       `Wrote ${sources.length} preview frames to ${outDir}\n\n` +
+        files.map((file, i) => `  ${i + 1}. ${file}`).join("\n") +
+        "\n\n" +
         "Look at them, then write your copy against what the footage is doing.\n",
     );
     return 0;
