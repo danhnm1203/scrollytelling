@@ -8,6 +8,28 @@
       name="description"
       content="A scroll-driven look at how Orbit comes apart, and how precisely it goes back together."
     />
+
+    <!--
+      The link preview. A crawler never runs this page — it reads the markup and
+      stops — so this is the whole preview, and an empty head is a bare link in
+      Slack, X and Discord however good the page is.
+
+      Left empty on purpose. `scrollytelling frames --site-url <url>` fills them
+      from components/story.js and writes the card image; without that flag they
+      stay empty, because a relative og:image resolves against the crawler's own
+      base and silently fetches something else. Delete any of them and the
+      command leaves it deleted.
+    -->
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="" />
+    <meta property="og:description" content="" />
+    <meta property="og:url" content="" />
+    <meta property="og:image" content="" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="" />
+    <meta name="twitter:description" content="" />
+    <meta name="twitter:image" content="" />
+
     <link rel="stylesheet" href="./lib/scroll-engine.css" />
     <style>
       :root {

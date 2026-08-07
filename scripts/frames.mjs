@@ -435,7 +435,7 @@ function templateFor(projectDir, override, { strict }) {
  * Only the block between the markers; everything else on that page belongs to
  * whoever generated the project.
  */
-function writeOutline(projectDir, template) {
+function writeOutline(projectDir, template, options) {
   const pagePath = join(projectDir, template.outlinePath);
   const storyPath = join(projectDir, template.storyPath);
 
@@ -444,7 +444,7 @@ function writeOutline(projectDir, template) {
   try {
     const story = parseStory(readFileSync(storyPath, "utf8"));
     const page = readFileSync(pagePath, "utf8");
-    writeFileSync(pagePath, replaceOutline(page, story));
+    writeFileSync(pagePath, replaceOutline(page, story, options));
   } catch (err) {
     // Loud, not fatal. The frames themselves encoded fine and the page will
     // still scrub; what is stale is the copy a screen reader gets, and saying
@@ -497,6 +497,58 @@ export function framePathSource(publicDir) {
           " * rewrite.",
         body: "  return `/frames/${sequenceId}_${index}.webp`;",
       };
+}
+
+/**
+ * The link-preview card: name, size, and how a page refers to it.
+ *
+ * 1200x630 because that is what every unfurler crops toward; anything else gets
+ * cropped for you, and rarely where you would have chosen.
+ *
+ * JPEG, not webp. The frames are webp because the page decodes them and the
+ * page is a browser. A link unfurler is somebody else's code — Slack's, X's,
+ * whatever a chat app embeds — and webp support across that set is unverified.
+ * This is the one asset where the decoder is not ours to check.
+ */
+export const CARD_FILE = "og.jpg";
+const CARD_WIDTH = 1200;
+const CARD_HEIGHT = 630;
+
+/**
+ * How a page refers to the card, given where the template serves static files.
+ *
+ * The same split as framePathSource: the html template puts everything beside
+ * the page, while a framework's public/ is served at the site root. Resolved
+ * against SITE_URL, "og.jpg" lands under a base path and "/og.jpg" at the root
+ * — which is what each one needs.
+ */
+export function cardPathFor(publicDir) {
+  return publicDir === "." ? CARD_FILE : `/${CARD_FILE}`;
+}
+
+/**
+ * Writes the card, from the frame the page opens on.
+ *
+ * Frame 0 on purpose: it is the poster, so the preview and the first thing a
+ * visitor sees are the same moment. A preview showing a moment the page never
+ * opens on is a small lie, and the kind nobody notices until they compare.
+ *
+ * The source frame, not the encoded webp — it has not been resized yet, so the
+ * card is cut from more pixels than the page ever shows.
+ *
+ * Cover-fit rather than letterboxed. Bars around a 16:9 frame inside a 1.91:1
+ * card read as a broken image at thumbnail size. The crop is centred, which
+ * matches the landscape sequence because that one is never cropped (`crop:
+ * null` in planSequences); `--focus` aims the PORTRAIT crop only, so a phone
+ * visitor can see a differently-framed image than the card. That is accepted:
+ * one card cannot be two crops, and the landscape framing is the one a link
+ * preview is sized for.
+ */
+async function writeCard(sharp, sourceFrame, target) {
+  await sharp(sourceFrame)
+    .resize(CARD_WIDTH, CARD_HEIGHT, { fit: "cover", position: "centre" })
+    .jpeg({ quality: 82, mozjpeg: true })
+    .toFile(target);
 }
 
 /**
@@ -708,10 +760,30 @@ async function frames(positionals, flags) {
     mkdirSync(dirname(framesOut), { recursive: true });
     writeFileSync(framesOut, renderContract(sequences, template.publicDir, flags["site-url"]));
 
+    // Written whatever happens, because the file is useful on its own. What
+    // --site-url decides is whether the page can POINT at it, not whether it
+    // exists — a card nothing references costs one file, and a page that
+    // references a card nobody built costs a broken preview.
+    //
+    // Loud, not fatal, the same as the outline below. By this line the rename
+    // has happened and the contract is written: the frames encoded fine and the
+    // page will scrub. Failing the whole run over a link preview would send
+    // someone back through the entire encode to recover work that succeeded.
+    try {
+      await writeCard(sharp, sources[0], join(projectDir, template.publicDir, CARD_FILE));
+    } catch (err) {
+      warnings.push(`the link preview card could not be written — ${err.message}`);
+    }
+
     // A template with no render step cannot build its own story outline, and
     // that outline is what assistive technology reads and what the page becomes
     // under reduced motion. Regenerated from the story so the two cannot drift.
-    if (template.outlinePath) writeOutline(projectDir, template);
+    if (template.outlinePath) {
+      writeOutline(projectDir, template, {
+        siteUrl: flags["site-url"],
+        cardPath: cardPathFor(template.publicDir),
+      });
+    }
 
     report({ sequences, bytes, warnings });
     return 0;
