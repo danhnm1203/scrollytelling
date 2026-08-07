@@ -240,3 +240,34 @@ describe("planning a sample site", () => {
     assert.match(plan.note, /server/i);
   });
 });
+
+describe("planSample — the site url", () => {
+  it("is absent unless asked for, so a local look-at-the-page build is unchanged", () => {
+    assert.equal(planSample([]).siteUrl, null);
+  });
+
+  it("is carried through to the build", () => {
+    const plan = planSample(["--site-url", "https://danhnm1203.github.io/scrollytelling/"]);
+    assert.equal(plan.siteUrl, "https://danhnm1203.github.io/scrollytelling/");
+  });
+
+  it("is passed on verbatim, because the CLI is what validates it", () => {
+    // Two validators disagreeing is worse than one: `frames` already refuses a
+    // relative url, a scheme no crawler will fetch, and a base with a query,
+    // and it normalises the trailing slash. Re-implementing any of that here
+    // would drift.
+    const plan = planSample(["--site-url", "https://example.com/no-slash"]);
+    assert.equal(plan.siteUrl, "https://example.com/no-slash");
+  });
+
+  it("refuses to be given twice, like every other flag here", () => {
+    assert.throws(
+      () => planSample(["--site-url", "https://a.test/", "--site-url", "https://b.test/"]),
+      /twice/,
+    );
+  });
+
+  it("refuses an empty value rather than building an unguarded page", () => {
+    assert.throws(() => planSample(["--site-url", ""]), /empty/);
+  });
+});

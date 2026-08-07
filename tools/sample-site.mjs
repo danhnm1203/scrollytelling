@@ -31,7 +31,7 @@
  */
 
 import { execFile, spawn } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, statSync } from "node:fs";
 import { copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -43,6 +43,9 @@ import sharp from "sharp";
 
 import { withSections } from "./demo-page.mjs";
 import { planSample } from "./sample-plan.mjs";
+import { cardBytesOf, cardProblems } from "./demo-card.mjs";
+import { TEMPLATES } from "../lib/template-manifest.mjs";
+import { CARD_FILE } from "../scripts/frames.mjs";
 
 const run = promisify(execFile);
 
@@ -171,10 +174,51 @@ async function main() {
     }
 
     log(`measuring and encoding ${plan.frames} frames — this is the slow part`);
-    await run(process.execPath, [CLI, "frames", clip, project, "--frames", String(plan.frames)], {
+    const framesArgs = [CLI, "frames", clip, project, "--frames", String(plan.frames)];
+    if (plan.siteUrl) framesArgs.push("--site-url", plan.siteUrl);
+    await run(process.execPath, framesArgs, {
       cwd: REPO,
       maxBuffer: 32 * 1024 * 1024,
     });
+
+    // The build can exit 0 having written a page whose card tags are empty. It
+    // renders, it deploys, and the only symptom is that every share of it is a
+    // bare url — the same class of hole as a page that scrubs one frame
+    // forever. Checked here rather than in the workflow so a local
+    // `npm run sample --site-url …` is held to it too.
+    if (plan.siteUrl) {
+      const template = TEMPLATES[plan.template];
+      if (!template.outlinePath) {
+        // Only the zero-build template has a page whose head `frames` writes.
+        // The others render their own, at their own build step, which has not
+        // run yet — so there is nothing here to check and pretending otherwise
+        // would read a file that does not exist. Said out loud rather than
+        // skipped quietly. See #79.
+        log(
+          `the ${plan.template} template renders its own head, so there is no ` +
+            `page here to check yet — the link preview guard covers the html ` +
+            `template only`,
+        );
+      } else {
+        // throwIfNoEntry: false gives one syscall and no window between asking
+        // whether the file exists and asking about it.
+        const cardFile = join(project, CARD_FILE);
+        const problems = cardProblems(
+          await readFile(join(project, template.outlinePath), "utf8"),
+          {
+            siteUrl: plan.siteUrl,
+            cardBytes: cardBytesOf(statSync(cardFile, { throwIfNoEntry: false })),
+          },
+        );
+        if (problems.length > 0) {
+          throw new Error(
+            `the page built, but its link preview is not publishable:\n` +
+              problems.map((p) => `  - ${p}`).join("\n"),
+          );
+        }
+        log(`link preview checked against ${plan.siteUrl}`);
+      }
+    }
 
     if (plan.install) {
       log(`installing: ${plan.install.join(" ")}`);

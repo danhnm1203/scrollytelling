@@ -327,3 +327,30 @@ describe("filling a tag the author reformatted", () => {
     );
   });
 });
+
+describe("copy that looks like a replacement pattern", () => {
+  it("writes $& out literally instead of substituting the match", () => {
+    // String replacements interpret $&, $1 and friends. The value here is the
+    // author's copy, so a title containing $& would be replaced by the tag it
+    // was being written into. Function replacements, both hops.
+    const page = [
+      "<html><head>",
+      '<meta property="og:title" content="" />',
+      "<title>x</title>",
+      "</head><body>",
+      OPEN_MARKER,
+      CLOSE_MARKER,
+      "</body></html>",
+    ].join("\n");
+    const out = replaceOutline(page, { title: "Cash $& carry $1" }, { siteUrl: "https://e.com/" });
+    assert.ok(
+      out.includes('<meta property="og:title" content="Cash $&amp; carry $1" />'),
+      `got: ${/<meta property="og:title"[^>]*>/.exec(out)?.[0]}`,
+    );
+    assert.equal(
+      out.split('property="og:title"').length - 1,
+      1,
+      "the tag should appear once, not have itself substituted into its own value",
+    );
+  });
+});
