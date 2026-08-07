@@ -35,6 +35,11 @@
  * execFile with a project directory that came from a temp path, and this
  * repository does not do shell interpolation anywhere a path can reach.
  *
+ * `serve`, when present, means this template's document does not exist until a
+ * request is made. The gate starts the server, fetches one page, and treats the
+ * response as another emitted file — which is the only way to check a head that
+ * is composed per request.
+ *
  * `outDir` is where the build leaves the files, relative to the project. It is
  * searched recursively rather than at a fixed depth — Next moves its output
  * between minor versions (CSS lives under static/chunks/ now, not static/css/),
@@ -64,6 +69,15 @@ export const BUILD_PLANS = {
     // the stylesheet and the frames all land under public/.
     outDir: ".output",
     alsoSearch: [],
+    // Nuxt renders the document when a request arrives, not when the build
+    // runs, so its head exists in no file on disk. The card url in particular
+    // is composed at request time from SITE_URL, so the built bundle contains
+    // the origin and the filename but never the joined string a crawler reads.
+    //
+    // Walking the output can therefore prove the worker, the stylesheet and the
+    // frames shipped, and can prove nothing at all about the head. So the gate
+    // asks the server for the page, the same way a crawler would.
+    serve: { argv: ["node", ".output/server/index.mjs"], path: "/" },
   },
   html: {
     // The whole claim of this template is that there is nothing to install and

@@ -231,3 +231,42 @@ describe("missingArtifacts", () => {
     assert.ok(missingArtifacts(notServed).includes("decoder worker"));
   });
 });
+
+describe("templates whose document does not exist until it is asked for", () => {
+  // Nuxt renders per request, so its head is in no built file. The card url in
+  // particular is composed at request time from SITE_URL: the bundle carries
+  // the origin and the filename, never the joined string a crawler reads.
+  //
+  // CI is what found this. The gate walked 47 emitted files, proved the worker,
+  // the stylesheet and the frames had shipped, and could say nothing about the
+  // head — so it failed nuxt while the template was in fact correct. A gate
+  // that had matched on "og:image" instead would have passed it for the wrong
+  // reason, because unhead is in that bundle.
+
+  it("declares which templates have to be asked", () => {
+    assert.ok(BUILD_PLANS.nuxt.serve, "nuxt renders per request");
+    assert.deepEqual(BUILD_PLANS.nuxt.serve.argv, ["node", ".output/server/index.mjs"]);
+    assert.equal(BUILD_PLANS.nuxt.serve.path, "/");
+  });
+
+  it("leaves the templates that build a document alone", () => {
+    // Starting a server for a template that already wrote its page would be
+    // slower and prove nothing extra.
+    for (const name of ["next", "astro", "html"]) {
+      assert.equal(BUILD_PLANS[name].serve, undefined, `${name} builds a document`);
+    }
+  });
+
+  it("treats a served response as a document the artifacts can match", () => {
+    // The pseudo-path the gate gives a fetched page has to satisfy the same
+    // predicate a real .html file does, or every artifact silently skips it.
+    const served = {
+      path: "served/index.html",
+      text: `<meta property="og:image" content="${GATE_SITE_URL}og.jpg" />`,
+    };
+    const files = goodBuild()
+      .filter((f) => !f.path.endsWith(".html"))
+      .concat(served);
+    assert.deepEqual(missingArtifacts(files), []);
+  });
+});
