@@ -1,0 +1,80 @@
+name: Bug report
+description: Something did not work on your footage.
+title: "[Bug] "
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Footage is endless and varied, so most bugs here arrive with someone
+        else's video. The more of that video you can describe, the shorter this
+        gets.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you expected, and what you got instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: command
+    attributes:
+      label: The command you ran
+      description: Paste it whole, with any output or error.
+      render: shell
+    validations:
+      required: true
+
+  - type: dropdown
+    id: footage
+    attributes:
+      label: What went in
+      options:
+        - A clip I shot on my phone
+        - Stock or cinematic footage
+        - A folder of images
+        - A screen recording
+        - Something else
+    validations:
+      required: true
+
+  - type: dropdown
+    id: template
+    attributes:
+      label: Which stack
+      options:
+        - Next
+        - Nuxt
+        - Astro
+        - Plain HTML
+        - Not sure / it failed before that
+    validations:
+      required: true
+
+  - type: input
+    id: environment
+    attributes:
+      label: Node version and operating system
+      placeholder: node 22.12 on macOS 15
+    validations:
+      required: true
+
+  - type: dropdown
+    id: found-where
+    attributes:
+      label: Where did you find this project?
+      description: >
+        Asked on every form, so that a channel which brings people who hit real
+        bugs is not mistaken for a channel that brings nobody.
+      options:
+        - Hacker News
+        - Reddit
+        - X / Twitter
+        - A marketplace or skill directory
+        - A search engine
+        - Someone told me
+        - Somewhere else
+    validations:
+      required: true
