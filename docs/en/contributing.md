@@ -7,6 +7,39 @@ npm install
 npm test          # node:test, no build step
 ```
 
+## Looking at a change
+
+Tests say whether the numbers are right. They do not say whether the page feels
+right, and that is half of what this tool is for:
+
+```bash
+npm run sample                          # the next template, 50 frames
+npm run sample -- --template astro      # or nuxt, or html
+npm run sample -- --clip ./my-clip.mp4  # your own footage
+```
+
+It scaffolds a real project into `.sample-<template>/` — `.sample-next`,
+`.sample-astro` and so on, one per template so switching between them never
+scaffolds over the wrong project — runs the actual pipeline over it, installs,
+and starts the dev server.
+
+Without `--clip`, the footage is synthesised: a light sweeping across a dark
+field, so that the per-frame border colour and the copy backdrop have something
+to react to. A still image would encode fine and demonstrate nothing. It is
+generated rather than committed because a repository that carries video fixtures
+grows by megabytes per format change.
+
+The one committed clip is `tools/demo-clip.mp4`, which is what the published
+demo page is built from. It is a marketing asset rather than a fixture, and it
+stays out of the npm package because `tools/` is not in `files`.
+
+Everything it writes is gitignored and outside `files` in `package.json`, so a
+sample build cannot be committed or published by accident. That is enforced
+rather than arranged: `--out` only accepts a `.sample…` directory, which is
+exactly what `.gitignore` covers, and a test asserts the two agree.
+
+## Why the tests import plain JavaScript
+
 `lib/scroll-math.mjs` is plain JavaScript rather than TypeScript so `node:test`
 can import it with no compile step. It is copied into generated projects at
 scaffold time, so there is only one copy of it in this repository and no way for

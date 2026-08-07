@@ -5,6 +5,26 @@ Notable changes to `@danhnm1203/scrollytelling`.
 This file starts at 0.2.0. Earlier releases predate it and are not reconstructed
 here — inventing history is worse than admitting it was not kept.
 
+## Unreleased
+
+### Fixed
+
+- **A page from the `html` template 404'd every frame when deployed under a base
+  path.** The generated `framePath` returned `/frames/…`, which resolves to the
+  site root — so a GitHub Pages project site at `/<repo>/`, or any static host
+  serving the directory from a subfolder, loaded the page and then found no
+  images. It now resolves against the page itself and returns an absolute url.
+
+  Absolute rather than relative on purpose: the engine hands these urls to a
+  worker, and a worker resolves a relative url against its own script in `lib/`
+  rather than against the page, so a relative path would 404 there while the
+  poster image worked.
+
+  Only the `html` template changes. The other three serve frames from `public/`
+  at the site root, where `/frames/…` is correct — and their generated contract
+  still says, as it always did, that a deploy under a subdirectory needs that
+  function edited.
+
 ## 0.5.0 — the scrub stops looking like a slideshow
 
 Four defects in how the sequence is drawn, all found by building a real page on
