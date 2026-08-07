@@ -40,8 +40,45 @@ Keep the path. A GitHub Pages project site is served from `/<repo>/`, not from
 the origin root. The value must be an absolute `http` or `https` url with no
 query or fragment; anything else is refused rather than quietly recorded.
 
-Omit it and `SITE_URL` is `null`, which is what every project that has no use
-for it gets.
+## The link preview
+
+Every run writes `og.jpg` — a 1200×630 JPEG cut from the frame the page opens
+on, so the preview and the first thing a visitor sees are the same image. It is
+JPEG rather than webp because a link unfurler is somebody else's code and webp
+support across that set is unverified.
+
+With `--site-url`, the zero-build template's `og:` and `twitter:` tags are
+filled from `components/story.js` and the recorded address:
+
+```html
+<meta property="og:title"       content="…story.title" />
+<meta property="og:description" content="…story.description" />
+<meta property="og:url"         content="https://you.github.io/your-repo/" />
+<meta property="og:image"       content="https://you.github.io/your-repo/og.jpg" />
+```
+
+Without it the image and url tags stay empty and the page previews as a bare
+link. That is deliberate: a relative `og:image` resolves against the crawler's
+own base and silently fetches something else, which is worse than no card. The
+words still fill, because they cost nothing.
+
+The card file is written either way — what `--site-url` decides is whether the
+page can point at it.
+
+Delete any of those tags from your page and the command leaves them deleted,
+the same rule `<title>` follows. The framework templates render their own head;
+Next already does, and Nuxt and Astro are [#79](https://github.com/danhnm1203/scrollytelling/issues/79).
+
+### If your project predates this
+
+`frames` fills tags, it never adds them — a page missing one is missing it on
+purpose, and inventing markup in someone's page is not this command's job. So a
+project scaffolded before this shipped has no tags to fill, and `scaffold
+--diff` will report `index.html` as changed in the template and edited by you.
+
+That report is accurate and adopting is usually the wrong move: it would replace
+your copy with the template's. Copy the `og:` and `twitter:` block out of a
+fresh scaffold into your page's `<head>` instead, then re-run `frames`.
 
 ## `scaffold` options
 
