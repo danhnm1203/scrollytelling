@@ -1,0 +1,86 @@
+# A live page, built by the tool, from the tool's own pipeline.
+#
+# The html template is the one that can be published this way: no install, no
+# build, no server — the directory it produces is the site. It is also the
+# honest choice for a demo, because what a visitor scrolls is the same engine
+# every other template runs.
+#
+# The footage is committed, which is the one exception to this repository's rule
+# that video fixtures do not belong in git. The rule exists because a fixture
+# regrows every time a format changes; this is not a fixture but a marketing
+# asset with an owner who has the rights to publish it, and there is no other way
+# for CI to build the page from real footage. It stays out of the npm package —
+# tools/ is absent from `files` — so nobody installing the CLI pays for it.
+#
+# If it is ever re-encoded, replace the file rather than adding a second one: the
+# bytes are incompressible and every version stays in history forever.
+name: pages
+
+on:
+  push:
+    branches: [main]
+  # Build on every pull request too, without deploying. The page is built by the
+  # tool itself, so a break in the pipeline would otherwise be found at release
+  # time, on the deploy path, which is the worst place to find it.
+  pull_request:
+  workflow_dispatch:
+
+# A project site is served from /<repo>/, not from /. That is why the generated
+# contract resolves frame urls against the page rather than the site root — see
+# framePathSource in scripts/frames.mjs. Nothing here sets a base path, because
+# nothing needs to.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deploy at a time. Not cancel-in-progress: cancelling a run that is already
+# publishing can abort the deployment itself, and a stale-but-finished page beats
+# a half-replaced one.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Build the sample site
+        run: >-
+          node tools/sample-site.mjs --template html --frames 50
+          --clip tools/demo-clip.mp4 --story tools/demo-story.js
+
+      - name: Fail if the page has no frames to show
+        # The build can exit 0 having written a page that holds one frame
+        # forever: the html template renders fine with an empty sequence. A
+        # deploy of that looks like a working site and is not one.
+        run: |
+          count=$(ls .sample-html/frames/*.webp 2>/dev/null | wc -l)
+          echo "$count frames"
+          [ "$count" -ge 2 ] || { echo "::error::the sample built no frame sequence"; exit 1; }
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: .sample-html
+
+  deploy:
+    needs: build
+    # A pull request builds the page to prove it still builds; publishing it
+    # would put unreviewed work at the project's own public url.
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
