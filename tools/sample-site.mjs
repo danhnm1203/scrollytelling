@@ -32,7 +32,7 @@
 
 import { execFile, spawn } from "node:child_process";
 import { existsSync } from "node:fs";
-import { copyFile, mkdir, mkdtemp, rm } from "node:fs/promises";
+import { copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -41,6 +41,7 @@ import { promisify } from "node:util";
 import ffmpegPath from "ffmpeg-static";
 import sharp from "sharp";
 
+import { withSections } from "./demo-page.mjs";
 import { planSample } from "./sample-plan.mjs";
 
 const run = promisify(execFile);
@@ -154,6 +155,19 @@ async function main() {
       if (!existsSync(story)) throw new Error(`no such story: ${plan.story}`);
       log(`writing the copy from ${plan.story}`);
       await copyFile(story, join(project, "components", "story.js"));
+    }
+
+    if (plan.sections) {
+      // Under the runway, so it is what a visitor reaches after the scroll
+      // rather than something competing with it. The template's own page ends
+      // at the hero; the README has always said the rest of the page goes here,
+      // and this is the demo showing it.
+      const sections = resolve(process.cwd(), plan.sections);
+      if (!existsSync(sections)) throw new Error(`no such sections file: ${plan.sections}`);
+      log(`putting ${plan.sections} under the scroll`);
+      const pagePath = join(project, "index.html");
+      const page = await readFile(pagePath, "utf8");
+      await writeFile(pagePath, withSections(page, await readFile(sections, "utf8")));
     }
 
     log(`measuring and encoding ${plan.frames} frames — this is the slow part`);

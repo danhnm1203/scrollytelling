@@ -16,7 +16,12 @@ right, and that is half of what this tool is for:
 npm run sample                          # the next template, 50 frames
 npm run sample -- --template astro      # or nuxt, or html
 npm run sample -- --clip ./my-clip.mp4  # your own footage
+npm run sample -- --story ./copy.js --sections ./rest-of-page.html
 ```
+
+`--sections` puts a block of markup under the scroll, which is how the published
+demo shows that a hero is not the whole page. It is idempotent: running the
+build again replaces that block rather than stacking a second copy.
 
 It scaffolds a real project into `.sample-<template>/` — `.sample-next`,
 `.sample-astro` and so on, one per template so switching between them never

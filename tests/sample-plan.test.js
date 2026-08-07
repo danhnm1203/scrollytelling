@@ -107,6 +107,14 @@ describe("the page the workflow publishes", () => {
     assert.match(workflow, /::error::/);
   });
 
+  it("publishes a page that continues after the scroll", () => {
+    // The demo exists to show what the tool produces. A page that stops at the
+    // bottom of the hero shows half of it.
+    const sections = workflow.match(/--sections (\S+)/)?.[1];
+    assert.ok(sections, "the workflow publishes a hero with nothing under it");
+    assert.ok(existsSync(new URL(`../${sections}`, import.meta.url)), `${sections} does not exist`);
+  });
+
   it("publishes copy written for the footage, not the template's placeholder", () => {
     // The template ships a story about an invented product, which is right for
     // a scaffolded project and wrong for a published page. The demo page is
@@ -169,6 +177,17 @@ describe("planning a sample site", () => {
       () => planSample(["--template", "svelte"]),
       (err) => /svelte/.test(err.message) && /next/.test(err.message) && /astro/.test(err.message),
     );
+  });
+
+  it("takes a block of page sections to put under the scroll", () => {
+    // A hero is not a landing page. The README says the rest of the page goes
+    // below the runway; this is how the published demo shows that rather than
+    // ending in blank space.
+    assert.equal(planSample(["--sections", "./more.html"]).sections, "./more.html");
+  });
+
+  it("wants no sections unless asked", () => {
+    assert.equal(planSample([]).sections, null);
   });
 
   it("takes a clip to use instead of a synthesised one", () => {

@@ -1,0 +1,171 @@
+<!--
+  The rest of the demo page: what a visitor reaches after the scroll.
+
+  A hero is not a landing page, and a demo that ends at the bottom of the hero
+  shows half of what the tool produces. The README has always said the rest of
+  the page goes below the runway — this is that, on the published page.
+
+  Self-contained on purpose. It carries its own styles and its own background
+  rather than inheriting `--page-bg`, which the engine rewrites on every frame:
+  copy sitting on a colour that changes as you scroll is the one thing this
+  project exists to avoid.
+-->
+<style>
+  .after {
+    --ink: #f4f1ec;
+    --ink-dim: #a9a29a;
+    --rule: rgb(244 241 236 / 0.14);
+    position: relative;
+    z-index: 1;
+    background: #14110e;
+    color: var(--ink);
+    font-family:
+      system-ui,
+      -apple-system,
+      Segoe UI,
+      sans-serif;
+    padding: clamp(4rem, 10vw, 8rem) 1.5rem;
+  }
+
+  .after__inner {
+    margin: 0 auto;
+    max-width: 62rem;
+    display: grid;
+    gap: clamp(3rem, 7vw, 6rem);
+  }
+
+  .after h2 {
+    margin: 0 0 0.75rem;
+    font-size: clamp(1.6rem, 3.4vw, 2.4rem);
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    line-height: 1.15;
+  }
+
+  .after p {
+    margin: 0;
+    max-width: 44ch;
+    color: var(--ink-dim);
+    font-size: clamp(1rem, 1.6vw, 1.125rem);
+    line-height: 1.65;
+  }
+
+  .after__lede p {
+    max-width: 52ch;
+    color: var(--ink);
+    font-size: clamp(1.15rem, 2.2vw, 1.5rem);
+    line-height: 1.5;
+  }
+
+  .after__grid {
+    display: grid;
+    gap: 2.5rem 3rem;
+    grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr));
+  }
+
+  .after__grid h3 {
+    margin: 0 0 0.4rem;
+    font-size: 1rem;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+  }
+
+  .after__grid p {
+    font-size: 0.975rem;
+  }
+
+  .after__rule {
+    border: 0;
+    border-top: 1px solid var(--rule);
+    margin: 0;
+  }
+
+  .after__foot {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem 2rem;
+    justify-content: space-between;
+    align-items: baseline;
+    color: var(--ink-dim);
+    font-size: 0.9rem;
+  }
+
+  .after__foot a {
+    color: var(--ink);
+    text-underline-offset: 0.25em;
+  }
+
+  .after__note {
+    max-width: 46ch;
+  }
+</style>
+
+<div class="after">
+  <div class="after__inner">
+    <section class="after__lede">
+      <h2>One room, end to end</h2>
+      <p>
+        The clip above is a single unbroken walk: in past the basins, by the bath and the
+        daybed, through to the bed, and out onto the balcony. Nothing is cut, so the room
+        is the same room the whole way.
+      </p>
+    </section>
+
+    <hr class="after__rule" />
+
+    <section>
+      <h2>Inside</h2>
+      <div class="after__grid">
+        <div>
+          <h3>The bath</h3>
+          <p>
+            Freestanding, in the open beside the daybed, with twin basins and a lit mirror
+            on the way in.
+          </p>
+        </div>
+        <div>
+          <h3>The bed</h3>
+          <p>
+            Draped and shaded, facing the glass rather than the wall, with a desk and a
+            reading lamp beside it.
+          </p>
+        </div>
+        <div>
+          <h3>The daybed</h3>
+          <p>
+            Long enough to sleep on, set against the window where the light lands in the
+            afternoon.
+          </p>
+        </div>
+        <div>
+          <h3>The balcony</h3>
+          <p>
+            Two chairs and a low table, looking over the palms to the pool and the water
+            beyond it.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <hr class="after__rule" />
+
+    <section>
+      <h2>Outside the door</h2>
+      <p>
+        Gardens, the pool below the balcony, and the sea past the treeline — close enough
+        to walk to before breakfast.
+      </p>
+    </section>
+
+    <hr class="after__rule" />
+
+    <footer class="after__foot">
+      <p class="after__note">
+        A demonstration page, not a booking site. It was generated from one video by
+        <a href="https://github.com/danhnm1203/scrollytelling">scrollytelling</a> — a
+        command-line tool that turns a clip into a scroll-scrubbed page like this one.
+      </p>
+      <p><a href="https://github.com/danhnm1203/scrollytelling">See how it was built →</a></p>
+    </footer>
+  </div>
+</div>

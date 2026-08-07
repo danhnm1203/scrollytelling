@@ -58,6 +58,7 @@ jobs:
         run: >-
           node tools/sample-site.mjs --template html --frames 50
           --clip tools/demo-clip.mp4 --story tools/demo-story.js
+          --sections tools/demo-sections.html
 
       - name: Fail if the page has no frames to show
         # The build can exit 0 having written a page that holds one frame
