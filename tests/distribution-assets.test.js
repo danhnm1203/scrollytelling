@@ -25,8 +25,13 @@
  * question "where did this person come from" is answerable only if the forms
  * keep asking it.
  *
- * The README is asserted for its links only. What sits above its fold is a later
- * slice; that it does not point at pages which have moved is this one.
+ * The README is asserted twice over: that its links still resolve after the long
+ * reference moved to docs/en/, and that what sits above its fold says the things
+ * a stranger needs before deciding to scroll.
+ *
+ * Three parts of that fold — the GIF, the demo links and `homepage` — are not
+ * asserted, because the pages they point at do not exist yet. A rule that passes
+ * by pointing nowhere is worse than no rule; the debt is carried as a todo.
  */
 
 import assert from "node:assert/strict";
@@ -211,10 +216,89 @@ describe("the npm package metadata", () => {
     }
   });
 
+  it.todo("has a homepage pointing at the demo index — waiting on the demos to exist");
+
   it("still points at the repository it lives in", () => {
     // Cheap, but this is the only link npm shows before a homepage exists.
     assert.match(pkg.repository.url, /github\.com\/danhnm1203\/scrollytelling/);
   });
+});
+
+describe("the README above the fold", () => {
+  /**
+   * What a stranger sees before scrolling. Twenty lines is the budget; it is
+   * approximate by nature, so these rules are about what must appear within it,
+   * never about how many lines the file has.
+   *
+   * The GIF, the three demo links and `package.json.homepage` are the rest of
+   * this fold and are NOT asserted here, because the pages they point at do not
+   * exist yet. Assertions that pass by pointing nowhere would be worse than
+   * none — see the note in this file's PR.
+   */
+  const FOLD_LINES = 20;
+  const fold = readme.split("\n").slice(0, FOLD_LINES).join("\n");
+
+  it("names every stack a reader might be on", () => {
+    // The whole repositioning in one rule: a builder on Astro should not have
+    // to scroll to learn the tool is for them.
+    const named = frameworksNamedIn(fold);
+    assert.deepEqual(
+      FRAMEWORKS.filter((f) => !named.includes(f)),
+      [],
+      "the fold does not name every stack",
+    );
+  });
+
+  it("asks for one install command, not a choice between two", () => {
+    // A reader who has not decided to use this yet should not have to choose
+    // between npx and a global install first. Matched by package name, so the
+    // `npm install` that installs a *scaffolded project's* dependencies later
+    // in the file is not mistaken for a way to install this tool.
+    const installs = fold.match(/^\s*(npx|npm i(nstall)? -g)\s+@danhnm1203\/scrollytelling/gm);
+    assert.equal(installs?.length, 1, `expected one install command above the fold, got ${installs}`);
+  });
+
+  it("points a reader who built something at the form", () => {
+    // The primary metric is submissions to this form. Nothing collects them if
+    // the README never mentions it.
+    assert.match(readme, /issues\/new\?[^)]*template=show-your-page\.yml/);
+  });
+});
+
+describe("the README gallery", () => {
+  /**
+   * The gallery section. Throws when it is missing rather than letting the
+   * rules below fail as though the wording had drifted — the same reason
+   * `fieldsOf` and `deferredItems` throw.
+   */
+  function gallerySection() {
+    const at = readme.indexOf("## Gallery");
+    if (at === -1) throw new Error("the README has no ## Gallery section");
+    return readme.slice(at);
+  }
+
+  it("exists", () => {
+    assert.ok(gallerySection().length > 0);
+  });
+
+  // The two rules below check that a promise was made, and a promise exists
+  // only in its words — so unlike the rest of this file they do match on
+  // phrasing. They are narrow on purpose: the commitment is a specific one,
+  // and a gallery that hedged it into something vaguer should fail.
+
+  it("promises removal within a stated 24 hours", () => {
+    // The same promise the issue form makes at the point consent is given. A
+    // reader who meets the gallery first has to find it here too.
+    assert.match(gallerySection(), /remov\w+[^.]*24 hours/i);
+  });
+
+  it("states that entries are credited to whoever built them", () => {
+    // A gallery that does not distinguish the maintainer's own demos from
+    // other people's pages takes credit by omission.
+    assert.match(gallerySection(), /\b(built by|who built|credit\w*)\b/i);
+  });
+
+  it.todo("lists each entry with its author once entries exist");
 });
 
 describe("the deferred-work list", () => {
