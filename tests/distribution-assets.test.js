@@ -35,7 +35,7 @@
  */
 
 import assert from "node:assert/strict";
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { describe, it } from "node:test";
 
 import { templateNames } from "../lib/template-manifest.mjs";
@@ -256,11 +256,66 @@ describe("the README above the fold", () => {
    * approximate by nature, so these rules are about what must appear within it,
    * never about how many lines the file has.
    *
-   * The GIF is still not asserted: there is no recording yet. The demo link is,
-   * because the page it points at is published.
+   * The recording IS asserted now. It was the last thing missing here, and the
+   * only thing prose cannot do for this project: the product's whole value is
+   * what it looks like when scrolled, and for a long time the only image above
+   * the fold was a CI badge.
    */
   const FOLD_LINES = 20;
   const fold = readme.split("\n").slice(0, FOLD_LINES).join("\n");
+
+  it("shows the product before describing it", () => {
+    // 393 lines of prose and one CI badge was the state this rule ends. A
+    // stranger deciding whether to try a visual tool should not have to take
+    // it on faith and click through.
+    const images = fold.match(/<img\s[^>]*src="([^"]+)"/g) ?? [];
+    assert.ok(images.length > 0, "the fold shows no image of the product");
+  });
+
+  it("serves the recording from this project, wherever it is addressed from", () => {
+    // The rule is that the image cannot rot on somebody else's schedule, NOT
+    // that it has to be a relative path. Those are different, and the first
+    // version of this test confused them — it rejected any https src, which
+    // would have blocked the one fix available if the relative path turns out
+    // not to render on npmjs.com (docs/ is outside `files`, so the image is not
+    // in the tarball and npm has to rewrite the path to the repository).
+    //
+    // Either form is fine. A third-party host is not.
+    const src = /<img\s[^>]*src="([^"]+)"/.exec(fold)?.[1];
+    assert.ok(src, "no image src above the fold");
+
+    if (/^https?:/.test(src)) {
+      assert.match(
+        src,
+        /^https:\/\/raw\.githubusercontent\.com\/danhnm1203\/scrollytelling\//,
+        `${src} is hosted somewhere this project does not control`,
+      );
+      const path = src.replace(/^https:\/\/raw\.githubusercontent\.com\/danhnm1203\/scrollytelling\/[^/]+\//, "");
+      assert.ok(existsSync(new URL(`../${path}`, import.meta.url)), `${path} is not committed`);
+      return;
+    }
+
+    assert.ok(
+      existsSync(new URL(`../${src}`, import.meta.url)),
+      `${src} is referenced but not committed`,
+    );
+  });
+
+  it("keeps the recording small enough to load on a phone", () => {
+    // A README image nobody waits for is a README image nobody sees. Five
+    // megabytes is the ceiling the recipe was chosen against.
+    const src = /<img\s[^>]*src="([^"]+)"/
+      .exec(fold)[1]
+      .replace(/^https:\/\/raw\.githubusercontent\.com\/[^/]+\/[^/]+\/[^/]+\//, "");
+    const bytes = statSync(new URL(`../${src}`, import.meta.url)).size;
+    assert.ok(bytes < 5 * 1024 * 1024, `${src} is ${(bytes / 1024 / 1024).toFixed(2)}MB`);
+  });
+
+  it("describes the recording for a reader who cannot see it", () => {
+    // The one place this project cannot fall back on the story outline.
+    const alt = /<img\s[^>]*alt="([^"]*)"/.exec(fold)?.[1] ?? "";
+    assert.ok(alt.length > 20, `alt text is "${alt}"`);
+  });
 
   it("names every stack a reader might be on", () => {
     // The whole repositioning in one rule: a builder on Astro should not have
