@@ -5,6 +5,72 @@ Notable changes to `@danhnm1203/scrollytelling`.
 This file starts at 0.2.0. Earlier releases predate it and are not reconstructed
 here — inventing history is worse than admitting it was not kept.
 
+## 0.7.0 — a shared link shows the page, not a bare url
+
+Paste the address of a page this tool built into Slack, X or Discord and you got
+a bare link. A crawler never runs the page — it reads the served markup and stops
+— so the head at build time is the whole preview, and only the Next template had
+one. The demo, which every link in this README and in the package metadata points
+at, was built with `html`: the one stack with no card at all.
+
+All four templates now emit the same card, each through its own head mechanism,
+from one shared source. The build refuses to publish a demo whose preview did not
+come out, and the README finally shows what the tool makes.
+
+### Added
+
+- **`frames --site-url <url>`, and a link preview built from it.** A page cannot
+  work out its own address: `document.baseURI` answers for a browser that has
+  already fetched it, and a crawler building a preview never runs the page at
+  all. Told where it will be served from, `frames` writes a 1200×630 `og.jpg`
+  cut from the frame the page opens on, and fills the `og:` and `twitter:` tags
+  from `components/story.js`.
+
+  The value keeps its path — a GitHub Pages project site is served from
+  `/<repo>/`, not from the origin root — and is normalised to end in a slash,
+  because url resolution drops the last segment without one. A relative url, a
+  scheme no crawler will fetch, and a base carrying a query are all refused with
+  the value quoted back.
+
+  Without the flag the words still fill and the image and url stay empty. That is
+  deliberate: a relative `og:image` resolves against the crawler's own base and
+  silently fetches something else, which is worse than no card.
+
+- **The same card on Next, Nuxt, Astro and plain HTML.** Each stack keeps the
+  head mechanism a reader of that stack expects — `metadata`, `useHead`, Astro
+  markup, and a page `frames` rewrites — but what the card *contains* now comes
+  from one module installed into every project, the way the scroll math already
+  was. Four mechanisms is right; four answers would drift, and the drift is
+  invisible because every page still renders.
+
+  Next stops using the opening webp frame as its preview image. The frames are
+  webp because the page decodes them and the page is a browser; a link unfurler
+  is somebody else's code, and webp support across that set is unverified.
+
+### Fixed
+
+- **A generated Next project carried one machine's TypeScript build cache.**
+  `templates/next/tsconfig.tsbuildinfo` is gitignored, but `files` in
+  package.json is an allowlist and takes precedence, so `npm pack` shipped it and
+  `scaffold` copied it into every project. A stale `.tsbuildinfo` makes `tsc`
+  skip files it believes are unchanged, so a fresh project's type errors went
+  unreported — quiet and wrong rather than loud. Build output is now skipped when
+  a template is walked, for every framework rather than only the one that was
+  seen.
+
+### Upgrading
+
+Nothing changes for a project that does not pass `--site-url`; the generated
+contract and the page it produces are byte-identical to 0.6.1.
+
+`scaffold --diff` will report `index.html` as **changed in the template and
+edited by you** for every project generated before this. That report is accurate
+— the template gained the card tags, and your page has your copy in it — but
+adopting is the wrong move, because it would replace your copy with the
+template's. Copy the `og:` and `twitter:` block out of a fresh scaffold into your
+page's `<head>` instead, then re-run `frames`. See
+[docs/en/cli-reference.md](docs/en/cli-reference.md#if-your-project-predates-this).
+
 ## 0.6.1 — the page stops asking for frames it already has
 
 ### Fixed

@@ -573,3 +573,48 @@ describe("the issue forms", () => {
     assert.match(consentOf(showcase).text, /remove/i);
   });
 });
+
+describe("the version, everywhere it is written down", () => {
+  // It has drifted before: "release: say 0.4.2 everywhere the version is
+  // written down" exists because a release shipped with the package at one
+  // number and the plugin and skill at another. Nothing caught it, because
+  // nothing compared them.
+  //
+  // Four files say the version. A reader installing the plugin, a reader
+  // installing the skill and a reader installing the package should not be told
+  // three different things about which one they got.
+
+  const version = JSON.parse(read("../package.json")).version;
+
+  it("is a plain semver, so a tag can be built from it", () => {
+    assert.match(version, /^\d+\.\d+\.\d+$/, `package.json says "${version}"`);
+  });
+
+  it("says the same thing in the plugin manifest", () => {
+    assert.equal(JSON.parse(read("../.claude-plugin/plugin.json")).version, version);
+  });
+
+  it("says the same thing in the skill", () => {
+    const skill = read("../skills/scrollytelling/SKILL.md");
+    const declared = /^\s*version:\s*"([^"]+)"/m.exec(skill)?.[1];
+    assert.equal(declared, version, "skills/scrollytelling/SKILL.md disagrees");
+  });
+
+  it("has a changelog entry of its own", () => {
+    // A release whose notes are missing reads as "nothing changed" rather than
+    // "nobody wrote it down" — the same failure ci/changelog-notes.mjs exists
+    // to refuse, checked here before the tag rather than during the release.
+    const changelog = read("../CHANGELOG.md");
+    const headings = [...changelog.matchAll(/^## (\S+)/gm)].map((m) => m[1]);
+    assert.ok(
+      headings.includes(version),
+      `CHANGELOG.md has no "## ${version}" heading; it starts at ${headings[0]}`,
+    );
+  });
+
+  it("is the newest thing in the changelog, not something back-filled", () => {
+    const changelog = read("../CHANGELOG.md");
+    const first = /^## (\S+)/m.exec(changelog)?.[1];
+    assert.equal(first, version, `the top of the changelog is ${first}`);
+  });
+});
