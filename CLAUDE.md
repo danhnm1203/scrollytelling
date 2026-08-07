@@ -1,6 +1,7 @@
 # scrollytelling
 
-An npm CLI + skill that turns a video into a scroll-scrubbed Next.js landing page.
+An npm CLI + skill that turns a video into a scroll-scrubbed hero page — Next, Nuxt,
+Astro or plain HTML.
 
 - **Design (source of truth):** [docs/superpowers/specs/2026-08-04-scrollytelling-design.md](docs/superpowers/specs/2026-08-04-scrollytelling-design.md)
 - **Task order:** the [CEO review](docs/reviews/2026-08-04-ceo-review-scrollytelling.md) (T1–T23)
