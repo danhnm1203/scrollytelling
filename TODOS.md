@@ -27,6 +27,6 @@ than growing a parallel branch afterwards. See E5, E6, and E13 in the eng review
 | --- | --- |
 | Phase B — prompt → images → AI video | Its own spec. Costs money, calls async APIs. Does not block A. The join is a video file path. |
 | WebCodecs backend replacing frame extraction | Broadly shipped now (Safari 26+, Chrome Android 147) but heavier to build, and backwards scrubbing is still the hard part. The `frames.ts` contract keeps this option open, so no decision is needed today. |
-| Additional template stacks (Astro, Vue, static) | Each one means maintaining another copy of the scrubbing mechanism. Get one Next template right first. |
+| A fifth template stack (Svelte, SolidJS, plain Vue…) | Four ship. The original reason to defer this was that each stack meant maintaining another copy of the scrubbing mechanism; #39 removed that cost by making the engine shared and copied in at scaffold time. What remains is another shell, another set of file conventions, and another build in `ci/` — real, but no longer compounding. Worth doing when someone turns up wanting one. It is also why this is not newcomer work: it touches the template manifest, the scaffolder and `ci/` together. |
 | Multiple clips or chapters on a single page | Scope creep with low v1 value. Distinct from the landscape/portrait pair of a single clip, which is in scope. |
 | Staged implementation milestones | Considered during the eng review; the developer chose to run straight through all 40 tasks. Replaced by a single measurement checkpoint once the scrubbing loop first renders. |

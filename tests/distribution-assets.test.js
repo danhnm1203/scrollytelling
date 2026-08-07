@@ -33,12 +33,15 @@ import assert from "node:assert/strict";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { describe, it } from "node:test";
 
+import { templateNames } from "../lib/template-manifest.mjs";
+
 const read = (path) => readFileSync(new URL(path, import.meta.url), "utf8");
 const pkg = JSON.parse(read("../package.json"));
 const plugin = JSON.parse(read("../.claude-plugin/plugin.json"));
 const marketplace = JSON.parse(read("../.claude-plugin/marketplace.json"));
 const skill = read("../skills/scrollytelling/SKILL.md");
 const readme = read("../README.md");
+const todos = read("../TODOS.md");
 
 /** Every markdown link in `text`, as `{ label, target }`. */
 function linksIn(text) {
@@ -211,6 +214,67 @@ describe("the npm package metadata", () => {
   it("still points at the repository it lives in", () => {
     // Cheap, but this is the only link npm shows before a homepage exists.
     assert.match(pkg.repository.url, /github\.com\/danhnm1203\/scrollytelling/);
+  });
+});
+
+describe("the deferred-work list", () => {
+  // TODOS.md is read by the one stranger who got far enough to want to help,
+  // and it is the only file in the repo that can be contradicted by shipping
+  // something. A row that still defers work already done sends that person to
+  // build what exists.
+  const heading = "## Considered, not yet in the backlog";
+
+  /**
+   * The item named by each row of the deferred table — its first cell.
+   *
+   * Bounded to that one section: everything from its heading to the next `##`.
+   * Without the bound this reads every table to the end of the file, and a
+   * newcomer-tasks table added below would be checked as though it were
+   * deferred work. Throws rather than returning a partial read, for the same
+   * reason `fieldsOf` above does.
+   */
+  function deferredItems() {
+    const start = todos.indexOf(heading);
+    if (start === -1) throw new Error(`TODOS.md has no "${heading}" section`);
+    const rest = todos.slice(start + heading.length);
+    const end = rest.search(/\n## /);
+    const rows = (end === -1 ? rest : rest.slice(0, end))
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => line.startsWith("|"));
+
+    const separator = rows.findIndex((line) => /^\|[\s:|-]+\|$/.test(line));
+    if (separator === -1) throw new Error("the deferred table has no header separator");
+
+    return rows
+      .slice(separator + 1)
+      .map((line) => line.split(/(?<!\\)\|/)[1]?.trim())
+      .filter(Boolean);
+  }
+
+  it("is a table this test can read", () => {
+    // If this fails, every rule below it was about to pass by checking nothing.
+    assert.ok(deferredItems().length > 0, "found no deferred items to check");
+  });
+
+  it("defers no template stack that already ships", () => {
+    // Unlike the marketing copy above — which is deliberately checked against a
+    // hardcoded list, so that the claim and the code can disagree — this asks
+    // whether one file contradicts another, and the manifest is the authority
+    // on what ships.
+    //
+    // Narrowed to items that are about templates: `html` and `next` are
+    // ordinary English, and "an HTML export of the story outline" is a
+    // legitimate future entry that names no shipped stack.
+    for (const item of deferredItems().filter((i) => /\b(template|stack)s?\b/i.test(i))) {
+      for (const name of templateNames()) {
+        assert.doesNotMatch(
+          item,
+          new RegExp(`\\b${name}\\b`, "i"),
+          `TODOS defers "${item}", but templates/ ships ${name}`,
+        );
+      }
+    }
   });
 });
 
