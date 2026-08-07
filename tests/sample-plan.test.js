@@ -107,9 +107,11 @@ describe("the page the workflow publishes", () => {
     assert.match(workflow, /::error::/);
   });
 
-  it("publishes copy written for this project, not the template's placeholder", () => {
-    // The template ships a story about an invented product. That is right for a
-    // scaffolded project and wrong for the page at this project's own url.
+  it("publishes copy written for the footage, not the template's placeholder", () => {
+    // The template ships a story about an invented product, which is right for
+    // a scaffolded project and wrong for a published page. The demo page is
+    // written as a real landing page for the suite in the clip — what someone
+    // would actually build — rather than as a page about this tool.
     const story = workflow.match(/--story (\S+)/)?.[1];
     assert.ok(story, "the workflow does not override the template's copy");
     assert.ok(existsSync(new URL(`../${story}`, import.meta.url)), `${story} does not exist`);
