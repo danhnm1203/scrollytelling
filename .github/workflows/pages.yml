@@ -5,8 +5,15 @@
 # honest choice for a demo, because what a visitor scrolls is the same engine
 # every other template runs.
 #
-# The clip is synthesised in CI rather than committed, for the reason ci/ gives:
-# a repository carrying video fixtures grows by megabytes per format change.
+# The footage is committed, which is the one exception to this repository's rule
+# that video fixtures do not belong in git. The rule exists because a fixture
+# regrows every time a format changes; this is not a fixture but a marketing
+# asset with an owner who has the rights to publish it, and there is no other way
+# for CI to build the page from real footage. It stays out of the npm package —
+# tools/ is absent from `files` — so nobody installing the CLI pays for it.
+#
+# If it is ever re-encoded, replace the file rather than adding a second one: the
+# bytes are incompressible and every version stays in history forever.
 name: pages
 
 on:
@@ -48,7 +55,9 @@ jobs:
       - run: npm ci
 
       - name: Build the sample site
-        run: node tools/sample-site.mjs --template html --frames 50 --story tools/demo-story.js
+        run: >-
+          node tools/sample-site.mjs --template html --frames 50
+          --clip tools/demo-clip.mp4 --story tools/demo-story.js
 
       - name: Fail if the page has no frames to show
         # The build can exit 0 having written a page that holds one frame

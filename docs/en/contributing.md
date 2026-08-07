@@ -23,11 +23,15 @@ It scaffolds a real project into `.sample-<template>/` — `.sample-next`,
 scaffolds over the wrong project — runs the actual pipeline over it, installs,
 and starts the dev server.
 
-The clip is synthesised: a light sweeping across a dark field, so that the
-per-frame border colour and the copy backdrop have something to react to. A
-still image would encode fine and demonstrate nothing. Footage is synthesised
-rather than committed because a repository that carries video fixtures grows by
-megabytes per format change.
+Without `--clip`, the footage is synthesised: a light sweeping across a dark
+field, so that the per-frame border colour and the copy backdrop have something
+to react to. A still image would encode fine and demonstrate nothing. It is
+generated rather than committed because a repository that carries video fixtures
+grows by megabytes per format change.
+
+The one committed clip is `tools/demo-clip.mp4`, which is what the published
+demo page is built from. It is a marketing asset rather than a fixture, and it
+stays out of the npm package because `tools/` is not in `files`.
 
 Everything it writes is gitignored and outside `files` in `package.json`, so a
 sample build cannot be committed or published by accident. That is enforced

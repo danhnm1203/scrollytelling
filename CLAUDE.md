@@ -28,10 +28,12 @@ ci/                  the per-template build gate — installs, bundles, and chec
                      the emitted files. Needs a network, so it runs in CI, not
                      in `npm test`. Not in package.json `files`.
 tools/               `npm run sample` — scaffolds a real project into
-                     .sample-site/ and starts it, so a change can be looked at
-                     rather than only tested. Synthesises its own clip. Split
-                     pure/impure the way ci/ is. Gitignored output, and not in
-                     package.json `files`.
+                     .sample-<template>/ and starts it, so a change can be
+                     looked at rather than only tested. Split pure/impure the
+                     way ci/ is; its output is gitignored. Also holds the two
+                     inputs of the published demo page (demo-story.js and
+                     demo-clip.mp4), which ARE committed. Not in package.json
+                     `files`, so none of it ships.
 ```
 
 ## Invariants

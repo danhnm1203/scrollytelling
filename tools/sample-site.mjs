@@ -18,14 +18,16 @@
  * spawns a server. The decisions it makes before any of that are pure and live
  * in `sample-plan.mjs`, which is where the tests are.
  *
- * The clip is synthesised rather than committed, for the reason
- * `ci/build-template.mjs` gives: a repository that carries video fixtures grows
- * by megabytes per format change. Its generator is deliberately NOT reused
+ * With no `--clip`, the footage is synthesised rather than committed, for the
+ * reason `ci/build-template.mjs` gives: a repository that carries video fixtures
+ * grows by megabytes per format change. Its generator is deliberately NOT reused
  * here — that one is sized for a build gate and looks like a colour ramp,
  * because nobody watches it. This one is looked at, so it has motion worth
  * measuring: a light sweeps across a dark field, which is what makes the
- * per-frame border colour and the copy backdrop visibly do something. Pass
- * `--clip` to use real footage instead.
+ * per-frame border colour and the copy backdrop visibly do something.
+ *
+ * The published page passes `--clip tools/demo-clip.mp4`, real footage committed
+ * as a deliberate exception — see the note in .github/workflows/pages.yml.
  */
 
 import { execFile, spawn } from "node:child_process";

@@ -6,10 +6,19 @@
  * product. Everything else about it is ordinary output: the same engine, the
  * same generated contract, the same four beats a scaffolded project ships with.
  *
- * The beats sit where the synthesised clip is dark under them. The light sweeps
- * left to right across the clip, so a beat aligned left is placed late and a
- * beat aligned right is placed early — which is exactly the reasoning
- * `frames --check` exists to do for real footage.
+ * The beat positions are not round numbers, and are not guesses. They came from
+ * `scrollytelling frames --check`, run against the footage actually behind them:
+ * it named two beats that would fight a bright portrait crop and said where the
+ * frames were calmer. Those are the numbers below.
+ *
+ * Which means if you change the footage, re-run the check. The copy is written
+ * for this page; the positions are written for tools/demo-clip.mp4:
+ *
+ *   node tools/sample-site.mjs --template html --frames 50 \
+ *     --clip tools/demo-clip.mp4 --story tools/demo-story.js
+ *   node bin/cli.mjs frames --check .sample-html
+ *
+ * It should say "every beat sits on footage the scrim can handle".
  */
 
 /** @type {import("../templates/html/components/story").Story} */
@@ -33,13 +42,14 @@ export const story = {
       body: "The background is each frame's own edge colour, so the canvas has no visible edge against the page.",
     },
     {
-      at: 0.64,
+      at: 0.72,
       align: "left",
+      anchor: "bottom",
       heading: "Copy that stays readable",
       body: "The brightness behind each block of text is measured at encode time, and the backdrop is sized to it.",
     },
     {
-      at: 0.92,
+      at: 0.93,
       align: "center",
       anchor: "bottom",
       heading: "Next, Nuxt, Astro or plain HTML",

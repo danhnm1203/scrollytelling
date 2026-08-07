@@ -14,6 +14,7 @@
  */
 
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 
@@ -112,6 +113,27 @@ describe("the page the workflow publishes", () => {
     const story = workflow.match(/--story (\S+)/)?.[1];
     assert.ok(story, "the workflow does not override the template's copy");
     assert.ok(existsSync(new URL(`../${story}`, import.meta.url)), `${story} does not exist`);
+  });
+
+  it("builds from footage that is actually in the repository", () => {
+    // Tracked, not merely present. CI clones the repository; a clip sitting
+    // untracked on someone's laptop passes an existsSync check here and then
+    // fails the deploy. A missing --clip is quieter still: the runner would
+    // synthesise a clip and publish a different page than the one intended.
+    const clip = workflow.match(/--clip (\S+)/)?.[1];
+    assert.ok(clip, "the workflow does not name a clip, so it would synthesise one");
+    assert.doesNotThrow(
+      () => execFileSync("git", ["ls-files", "--error-unmatch", clip], { stdio: "ignore" }),
+      `${clip} is not tracked by git — CI would not have it`,
+    );
+  });
+
+  it("keeps that footage out of the published package", () => {
+    // 2.7MB of video in every `npx @danhnm1203/scrollytelling` would be a cost
+    // paid by every user for a page none of them asked for.
+    const clip = workflow.match(/--clip (\S+)/)?.[1] ?? "";
+    const top = clip.split("/")[0];
+    assert.ok(!pkg.files.includes(top), `package.json files ships ${top}, which holds the demo clip`);
   });
 
   it("does not publish from a pull request", () => {
