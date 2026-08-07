@@ -308,6 +308,27 @@ scrollytelling frames --preview <video>
 scrollytelling frames --check <project_dir>
 ```
 
+### `frames --preview`
+
+```bash
+scrollytelling frames --preview <video>
+```
+
+Samples up to five evenly spaced frames from the input and writes resized PNG
+previews to a temporary directory. It prints the directory path so you can
+inspect the frames before creating a project. It does not modify or write
+anything inside a project directory.
+
+### `frames --check`
+
+```bash
+scrollytelling frames --check <project_dir>
+```
+
+Reads the generated frame contract and story file from an existing project and
+reports readability issues. It checks generated output rather than reprocessing
+the source footage, so you can run it repeatedly without regenerating frames.
+
 ### `frames` options
 
 | Option | Default | Description |
