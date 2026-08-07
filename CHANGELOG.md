@@ -5,7 +5,12 @@ Notable changes to `@danhnm1203/scrollytelling`.
 This file starts at 0.2.0. Earlier releases predate it and are not reconstructed
 here — inventing history is worse than admitting it was not kept.
 
-## Unreleased
+## 0.6.0 — a page you can scroll, and it works where you put it
+
+Four templates have shipped since 0.5.0, but everything describing this tool
+still said Next.js, and there was nowhere to see what it produces. Both are
+fixed, and building the demo turned up a bug that would have hit anyone
+deploying the `html` template anywhere but a domain root.
 
 ### Fixed
 
@@ -24,6 +29,33 @@ here — inventing history is worse than admitting it was not kept.
   at the site root, where `/frames/…` is correct — and their generated contract
   still says, as it always did, that a deploy under a subdirectory needs that
   function edited.
+
+### Changed
+
+- **The package stops describing itself as a Next.js tool.** Four stacks ship.
+  The npm description and keywords, the plugin manifest, the marketplace entry
+  and `--help` now name all four or none — a builder on Nuxt or Astro previously
+  read the front page and correctly concluded, from what it said, that the tool
+  was not for them.
+
+- **The README leads with what you get instead of with prose.** The outcome, all
+  four stacks and one install command are inside the first twenty lines. The CLI
+  reference, the templates table, the deep half of *Why it looks right*, the
+  git-and-frames explanation and the contributing instructions moved to
+  `docs/en/`, linked rather than inlined. Nothing was deleted.
+
+### Added
+
+- **A live demo page**, built by this tool from real footage and published from
+  CI on every release.
+
+- **Two issue forms.** One for showing a page you built — with a separate,
+  refusable checkbox before it can appear in the README gallery, and a stated
+  24-hour removal policy — and one for bug reports.
+
+- **`npm run sample`** for anyone working on this repository: scaffolds a real
+  project, runs the real pipeline, and starts it, so a change can be looked at
+  rather than only tested.
 
 ## 0.5.0 — the scrub stops looking like a slideshow
 

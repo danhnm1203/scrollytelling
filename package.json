@@ -1,6 +1,6 @@
 {
   "name": "@danhnm1203/scrollytelling",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Turn a video you already have into a complete scroll-scrubbed hero page, in one command. Next, Nuxt, Astro or plain HTML.",
   "license": "MIT",
   "type": "module",
