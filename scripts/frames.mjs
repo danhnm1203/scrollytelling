@@ -98,6 +98,12 @@ const PORTRAIT_ASPECT = 9 / 16;
 
 class PipelineError extends Error {}
 
+
+/** Indents a block so borrowed output sits visibly under our own sentence. */
+function indent(text, pad = "    ") {
+  return text.split("\n").map((line) => pad + line).join("\n");
+}
+
 /* ------------------------------------------------------------------ deps -- */
 
 /**
@@ -219,10 +225,26 @@ async function extractFromVideo(ffmpegPath, file, count, workDir) {
       "-y",
       pattern,
     ]);
-    if (code !== 0) throw new PipelineError(`ffmpeg failed:\n${stderr.trim()}`);
+    if (code !== 0) {
+      throw new PipelineError(
+        `Could not read ${file} — ffmpeg could not decode it.\n` +
+          "  Most often this is a file that is not really a video, or a codec this\n" +
+          "  build of ffmpeg does not carry. Try converting it first, or run it\n" +
+          "  through `frames --preview` to see whether any frame comes out at all.\n" +
+          "  ffmpeg said:\n" +
+          indent(stderr.trim()),
+      );
+    }
 
     const produced = readdirSync(workDir).filter((f) => f.startsWith("src_")).sort(naturalCompare);
-    if (produced.length === 0) throw new PipelineError("ffmpeg produced no frames from the source");
+    if (produced.length === 0) {
+      throw new PipelineError(
+        `Read ${file}, but ffmpeg decoded no frames from it.\n` +
+          "  The container opened but held no usable video — often an audio-only\n" +
+          "  file, or one whose video track this build cannot decode. Try\n" +
+          "  `frames --preview` to confirm nothing comes out.",
+      );
+    }
     return { files: decimate(produced, count).map((f) => join(workDir, f)), warnings };
   }
 
@@ -239,7 +261,16 @@ async function extractFromVideo(ffmpegPath, file, count, workDir) {
       "-y",
       out,
     ]);
-    if (code !== 0) throw new PipelineError(`ffmpeg failed at ${at}s:\n${stderr.trim()}`);
+    if (code !== 0) {
+      throw new PipelineError(
+        `Could not read ${file} — ffmpeg could not decode it at ${at}s.\n` +
+          "  Most often this is a file that is not really a video, or a codec this\n" +
+          "  build of ffmpeg does not carry. Try converting it first, or run it\n" +
+          "  through `frames --preview` to see whether any frame comes out at all.\n" +
+          "  ffmpeg said:\n" +
+          indent(stderr.trim()),
+      );
+    }
     if (!existsSync(out)) {
       warnings.push(`no frame at ${at.toFixed(2)}s; skipped`);
       continue;
@@ -247,7 +278,14 @@ async function extractFromVideo(ffmpegPath, file, count, workDir) {
     files.push(out);
   }
 
-  if (files.length === 0) throw new PipelineError("ffmpeg produced no frames from the source");
+  if (files.length === 0) {
+    throw new PipelineError(
+      `Read ${file}, but no frames came out of it.\n` +
+        "  ffmpeg reported a duration but every timestamp came back empty — often\n" +
+        "  a truncated or variable-frame-rate file. Try `frames --preview` to see\n" +
+        "  whether any frame can be pulled at all.",
+    );
+  }
   return { files, warnings };
 }
 
